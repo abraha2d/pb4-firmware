@@ -1,41 +1,24 @@
-print("===IMPORTING captive_portal/dns/types.py===")
-import uctypes
-
-DNSHeaderFlagsLayout = {
-    "QR": 0 | uctypes.BFUINT16 | 15 << uctypes.BF_POS | 1 << uctypes.BF_LEN,
-    "OPCODE": 0 | uctypes.BFUINT16 | 11 << uctypes.BF_POS | 4 << uctypes.BF_LEN,
-    "AA": 0 | uctypes.BFUINT16 | 10 << uctypes.BF_POS | 1 << uctypes.BF_LEN,
-    "TC": 0 | uctypes.BFUINT16 | 9 << uctypes.BF_POS | 1 << uctypes.BF_LEN,
-    "RD": 0 | uctypes.BFUINT16 | 8 << uctypes.BF_POS | 1 << uctypes.BF_LEN,
-    "RA": 0 | uctypes.BFUINT16 | 7 << uctypes.BF_POS | 1 << uctypes.BF_LEN,
-    "Z": 0 | uctypes.BFUINT16 | 4 << uctypes.BF_POS | 3 << uctypes.BF_LEN,
-    "RCODE": 0 | uctypes.BFUINT16 | 0 << uctypes.BF_POS | 4 << uctypes.BF_LEN,
-}
+from uctypes import BF_LEN, BF_POS, BFUINT16, UINT16, UINT32
 
 
 DNSHeaderLayout = {
-    "ID": 0 | uctypes.UINT16,
-    "flags": (2, DNSHeaderFlagsLayout),
-    "QDCOUNT": 4 | uctypes.UINT16,
-    "ANCOUNT": 6 | uctypes.UINT16,
-    "NSCOUNT": 8 | uctypes.UINT16,
-    "ARCOUNT": 10 | uctypes.UINT16,
+    "ID": 0 | UINT16,
+    "QR": 2 | BFUINT16 | 15 << BF_POS | 1 << BF_LEN,
+    "OPCODE": 2 | BFUINT16 | 11 << BF_POS | 4 << BF_LEN,
+    "AA": 2 | BFUINT16 | 10 << BF_POS | 1 << BF_LEN,
+    "TC": 2 | BFUINT16 | 9 << BF_POS | 1 << BF_LEN,
+    "RD": 2 | BFUINT16 | 8 << BF_POS | 1 << BF_LEN,
+    "RA": 2 | BFUINT16 | 7 << BF_POS | 1 << BF_LEN,
+    "Z": 2 | BFUINT16 | 4 << BF_POS | 3 << BF_LEN,
+    "RCODE": 2 | BFUINT16 | 0 << BF_POS | 4 << BF_LEN,
+    "QDCOUNT": 4 | UINT16,
+    "ANCOUNT": 6 | UINT16,
+    "NSCOUNT": 8 | UINT16,
+    "ARCOUNT": 10 | UINT16,
 }
 
 
-DNSQuestionLayout = {
-    "QTYPE": 0 | uctypes.UINT16,
-    "QCLASS": 2 | uctypes.UINT16,
-}
-
-
-class DNSQuestion:
-    pass
-
-
-DNSAnswerLayout = {
-    "TYPE": 0 | uctypes.UINT16,
-    "CLASS": 2 | uctypes.UINT16,
-    "TTL": 4 | uctypes.UINT32,
-    "RDLENGTH": 8 | uctypes.UINT16,
+DNSAnswerExtraLayout = {
+    "TTL": 0 | UINT32,
+    "RDLENGTH": 4 | UINT16,
 }
