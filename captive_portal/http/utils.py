@@ -1,6 +1,3 @@
-print("===IMPORTING captive_portal/http/utils.py===")
-
-
 def url_decode(enc):
     if "=" in enc:
         return [url_decode(e) for e in enc.split("=")]

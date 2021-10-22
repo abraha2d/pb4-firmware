@@ -1,4 +1,3 @@
-print("===IMPORTING config.py===")
 from platform import nvs
 
 

@@ -1,6 +1,3 @@
-print("===IMPORTING captive_portal/http/utils.py===")
-
-
 def template(uri, qps, headers):
     try:
         with open(f"captive_portal/www{uri}", 'rb') as f:

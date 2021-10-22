@@ -1,4 +1,3 @@
-print("===IMPORTING platform.py===")
 import network
 import esp32
 

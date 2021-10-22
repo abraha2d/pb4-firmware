@@ -1,4 +1,3 @@
-print("===IMPORTING main2.py===")
 import micropython; micropython.alloc_emergency_exception_buf(100)
 
 from captive_portal.dns.server import DNSServer

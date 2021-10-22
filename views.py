@@ -1,4 +1,3 @@
-print("===IMPORTING views.py===")
 from captive_portal.http.views import template
 
 from utils import do_scan

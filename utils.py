@@ -1,4 +1,3 @@
-print("===IMPORTING utils.py===")
 from platform import wlan_sta
 
 

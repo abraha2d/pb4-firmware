@@ -1,4 +1,3 @@
-print("===IMPORTING captive_portal/http/server.py===")
 from socket import socket, SOL_SOCKET, SO_REUSEADDR
 
 from .utils import url_decode
