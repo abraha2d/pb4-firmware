@@ -1,4 +1,4 @@
-from uctypes import BF_LEN, BF_POS, BFUINT16, UINT16, UINT32
+from uctypes import BF_LEN, BF_POS, BFUINT16, UINT8, UINT16, UINT32
 
 
 DNSHeaderLayout = {
@@ -18,7 +18,15 @@ DNSHeaderLayout = {
 }
 
 
-DNSAnswerExtraLayout = {
-    "TTL": 0 | UINT32,
-    "RDLENGTH": 4 | UINT16,
+DNSAnswerLayout = {
+    "ONES": 0 | BFUINT16 | 14 << BF_POS | 2 << BF_LEN,
+    "OFFSET": 0 | BFUINT16 | 0 << BF_POS | 14 << BF_LEN,
+    "TYPE": 2 | UINT16,
+    "CLASS": 4 | UINT16,
+    "TTL": 6 | UINT32,
+    "RDLENGTH": 10 | UINT16,
+    "RDATA1": 12 | UINT8,
+    "RDATA2": 13 | UINT8,
+    "RDATA3": 14 | UINT8,
+    "RDATA4": 15 | UINT8,
 }

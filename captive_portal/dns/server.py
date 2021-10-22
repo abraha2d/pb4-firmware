@@ -32,7 +32,7 @@ class DNSServer:
         question = data[12:qname_end+4]
         print(f"- QUESTION: {question}")
 
-        response = data[:qname_end+4] + question + self.answer
+        response = data[:qname_end+4] + self.answer
         print(f"- RESPONSE: {response}")
 
         self.socket.sendto(response, addr)

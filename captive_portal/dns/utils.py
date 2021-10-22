@@ -1,6 +1,6 @@
 from uctypes import BIG_ENDIAN, addressof, struct
 
-from .types import DNSAnswerExtraLayout
+from .types import DNSAnswerLayout
 
 
 def get_qname_end(data):
@@ -13,10 +13,21 @@ def get_qname_end(data):
 
 
 def get_answer(ip_address):
-    an_buf = bytearray(6)
-    an = struct(addressof(an_buf), DNSAnswerExtraLayout, BIG_ENDIAN)
+    an_buf = bytearray(16)
+    an = struct(addressof(an_buf), DNSAnswerLayout, BIG_ENDIAN)
+
+    an.ONES = 0b11
+    an.OFFSET = 12
+
+    an.TYPE = 1
+    an.CLASS = 1
     an.TTL = 15
     an.RDLENGTH = 4
 
-    rdata = bytes(int(i) for i in ip_address.split("."))
-    return an_buf + rdata
+    b1, b2, b3, b4 = ip_address.split(".")
+    an.RDATA1 = int(b1)
+    an.RDATA2 = int(b2)
+    an.RDATA3 = int(b3)
+    an.RDATA4 = int(b4)
+
+    return an_buf
