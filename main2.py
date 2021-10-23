@@ -8,34 +8,39 @@ from platform import wlan_ap, wlan_sta
 from urlconf import urlconf
 
 
+def do_serve():
+    wlan_ap.active(True)
+    ip_address = wlan_ap.ifconfig()[0]
+
+    dns_server = DNSServer(ip_address)
+    # http_server = HTTPServer(ip_address, urlconf)
+
+    dns_server.start()
+    while not wlan_sta.isconnected():
+        pass
+    dns_server.stop()
+
+    wlan_ap.active(False)
+
+
 def do_connect():
-    print("===STARTING main.do_connect()===")
     wlan_sta.active(True)
-    print("===GETTING wlan config===")
     wlan_config = get_wlan_config()
+
     if not wlan_config:
-        print("===NO CONFIG, starting AP===")
-        wlan_ap.active(True)
-        ip_address = wlan_ap.ifconfig()[0]
-        dns_server = DNSServer(ip_address)
-        http_server = HTTPServer(ip_address, urlconf)
-        print("===ENTERING infinite loop===")
-        while True:
-            dns_server.process()
-            http_server.process()
+        do_serve()
     else:
-        print("===CONNECTING to Wi-Fi===")
         wlan_ssid, wlan_pass = wlan_config
         wlan_sta.connect(wlan_ssid, wlan_pass)
-    while not wlan_sta.isconnected():
-        # TODO: Start AP after timeout
-        pass
-    print("===CONNECTED to Wi-Fi===")
+
+        while not wlan_sta.isconnected():
+            # TODO: do_serve() after timeout
+            pass
+
     print('network config:', wlan_sta.ifconfig())
 
 
 def main():
-    print("===STARTING main.main()===")
     do_connect()
 
 

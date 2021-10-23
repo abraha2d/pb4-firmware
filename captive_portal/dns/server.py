@@ -1,4 +1,6 @@
-from socket import socket, AF_INET, SOCK_DGRAM
+from _thread import allocate_lock, start_new_thread
+from socket import AF_INET, SO_REUSEADDR, SOCK_DGRAM, SOL_SOCKET, getaddrinfo, socket
+
 from uctypes import BIG_ENDIAN, addressof, struct
 
 from .types import DNSHeaderLayout
@@ -6,16 +8,43 @@ from .utils import get_qname_end, get_answer
 
 
 class DNSServer:
-    def __init__(self, ip_addr, bind_addr=("0.0.0.0", 53)):
+    def __init__(self, ip_addr, bind_addr=getaddrinfo("0.0.0.0", 53, AF_INET, SOCK_DGRAM)[0][-1]):
         self.answer = get_answer(ip_addr)
+        self.bind_addr = bind_addr
+        self.run_lock = allocate_lock()
+        self.should_run = False
 
-        self.socket = socket(AF_INET, SOCK_DGRAM)
-        self.socket.setblocking(False)
-        self.socket.bind(bind_addr)
+    def start(self):
+        print("Starting DNS server...")
+        self.should_run = True
+        start_new_thread(self.run, ())
 
-    def process(self):
+    def run(self):
+        print("DNS server is starting...")
+        with self.run_lock:
+            try:
+                sock = socket(AF_INET, SOCK_DGRAM)
+                sock.setblocking(False)
+                sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+                sock.bind(self.bind_addr)
+
+                print("DNS server has started.")
+                while self.should_run:
+                    self.process(sock)
+                print("DNS server is stopping.")
+            finally:
+                sock.close()
+
+    def stop(self):
+        print("Stopping DNS server...")
+        self.should_run = False
+        while self.run_lock.locked():
+            pass
+        print("DNS server has stopped.")
+
+    def process(self, sock):
         try:
-            data, addr = self.socket.recvfrom(512)
+            data, addr = sock.recvfrom(512)
         except OSError:
             return
 
@@ -29,16 +58,10 @@ class DNSServer:
         header.ARCOUNT = 0
 
         qname_end = get_qname_end(data)
-        question = data[12:qname_end+4]
+        question = data[12:qname_end + 4]
         print(f"- QUESTION: {question}")
 
-        response = data[:qname_end+4] + self.answer
+        response = data[:qname_end + 4] + self.answer
         print(f"- RESPONSE: {response}")
 
-        self.socket.sendto(response, addr)
-
-
-# if __name__ == "__main__":
-#     dns_server = DNSServer("192.168.4.1", ("0.0.0.0", 8053))
-#     while True:
-#         dns_server.process()
+        sock.sendto(response, addr)

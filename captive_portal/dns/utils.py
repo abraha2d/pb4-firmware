@@ -24,10 +24,7 @@ def get_answer(ip_address):
     an.TTL = 15
     an.RDLENGTH = 4
 
-    b1, b2, b3, b4 = ip_address.split(".")
-    an.RDATA1 = int(b1)
-    an.RDATA2 = int(b2)
-    an.RDATA3 = int(b3)
-    an.RDATA4 = int(b4)
+    # inet_pton doesn't seem to exist
+    an.RDATA[:] = bytes(int(i) for i in ip_address.split("."))
 
     return an_buf
