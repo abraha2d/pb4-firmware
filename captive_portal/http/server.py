@@ -1,5 +1,5 @@
-import errno
 from _thread import start_new_thread, allocate_lock
+from errno import EAGAIN
 from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, getaddrinfo, socket
 from sys import print_exception
 
@@ -14,6 +14,7 @@ class HTTPServer:
         self.bind_addr = bind_addr
         self.run_lock = allocate_lock()
         self.should_run = False
+        self.num_threads = 0
 
     def start(self):
         self.should_run = True
@@ -29,12 +30,16 @@ class HTTPServer:
                 sock.listen(5)
 
                 while self.should_run:
+                    if self.num_threads >= 4:
+                        continue
+
                     try:
                         conn, addr = sock.accept()
                     except OSError as e:
-                        if e.errno == errno.EAGAIN:
+                        if e.errno == EAGAIN:
                             continue
                         raise
+
                     start_new_thread(self.process, (conn,))
             finally:
                 sock.close()
@@ -45,6 +50,8 @@ class HTTPServer:
             pass
 
     def process(self, conn):
+        self.num_threads += 1
+
         request = bytearray()
         while True:
             try:
@@ -75,6 +82,8 @@ class HTTPServer:
 
         conn.send(response.encode() + data)
         conn.close()
+
+        self.num_threads -= 1
 
     def get_response(self, request):
         request_lines = request.split("\r\n")

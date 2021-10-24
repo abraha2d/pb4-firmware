@@ -5,7 +5,7 @@ from captive_portal.http.server import HTTPServer
 
 from config import get_wlan_config
 from platform import wlan_ap, wlan_sta
-from urlconf import urlconf
+from views import urlconf
 
 
 def do_setup():
@@ -48,5 +48,5 @@ def main():
     do_connect()
 
 
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()
