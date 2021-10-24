@@ -4,7 +4,7 @@ from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
 
 from config import get_wlan_config
-from platform import wlan_ap, wlan_sta
+from upy_platform import wlan_ap, wlan_sta
 from views import urlconf
 
 

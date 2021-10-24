@@ -1,4 +1,4 @@
-from platform import nvs
+from upy_platform import nvs
 
 
 def get_wlan_config():

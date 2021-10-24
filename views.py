@@ -3,7 +3,7 @@ from json import dumps
 from captive_portal.http.views import file_view
 
 from config import set_wlan_config
-from platform import wlan_sta
+from upy_platform import wlan_sta
 
 
 def connect(path, query_dict, headers):
@@ -28,7 +28,7 @@ def index(path, query_dict, headers):
 
 def scan(path, query_dict, headers):
     networks = wlan_sta.scan()
-    return 200, {}, f'{dumps(networks)}'
+    return 200, {}, dumps(networks)
 
 
 urlconf = {
