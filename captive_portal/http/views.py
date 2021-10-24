@@ -1,11 +1,7 @@
-def template(uri, qps, headers):
+def file_view(path, query_dict, headers):
     try:
-        with open(f"captive_portal/www{uri}", 'rb') as f:
+        with open(f"{__file__.rsplit('/', 2)[0]}/www{path}", 'rb') as f:
             data = f.read()
     except OSError:
-        return 404, f"{uri} not found!"
-    try:
-        data = data % qps
-    except (TypeError, ValueError):
-        pass
+        return 404, {}, f"{path} not found!"
     return 200, {}, data

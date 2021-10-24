@@ -8,17 +8,21 @@ from platform import wlan_ap, wlan_sta
 from urlconf import urlconf
 
 
-def do_serve():
+def do_setup():
     wlan_ap.active(True)
     ip_address = wlan_ap.ifconfig()[0]
 
     dns_server = DNSServer(ip_address)
-    # http_server = HTTPServer(ip_address, urlconf)
+    http_server = HTTPServer(ip_address, urlconf)
 
     dns_server.start()
+    http_server.start()
+
     while not wlan_sta.isconnected():
         pass
+
     dns_server.stop()
+    http_server.stop()
 
     wlan_ap.active(False)
 
@@ -28,7 +32,7 @@ def do_connect():
     wlan_config = get_wlan_config()
 
     if not wlan_config:
-        do_serve()
+        do_setup()
     else:
         wlan_ssid, wlan_pass = wlan_config
         wlan_sta.connect(wlan_ssid, wlan_pass)

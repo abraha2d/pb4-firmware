@@ -1,97 +1,106 @@
-from socket import socket, SOL_SOCKET, SO_REUSEADDR
+import errno
+from _thread import start_new_thread, allocate_lock
+from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, getaddrinfo, socket
+from sys import print_exception
 
 from .utils import url_decode
-from .views import template
+from .views import file_view
 
 
 class HTTPServer:
-    def __init__(self, ip_addr, urlconf, bind_addr=("0.0.0.0", 80)):
-        print("===INITIALIZING HTTP server===")
+    def __init__(self, ip_addr, urlconf, bind_addr=getaddrinfo("0.0.0.0", 80, AF_INET, SOCK_STREAM)[0][-1]):
         self.ip_addr = ip_addr
         self.urlconf = urlconf
+        self.bind_addr = bind_addr
+        self.run_lock = allocate_lock()
+        self.should_run = False
 
-        self.socket = socket()
-        self.socket.setblocking(False)
-        self.socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        self.socket.bind(bind_addr)
-        self.socket.listen(1)
+    def start(self):
+        self.should_run = True
+        start_new_thread(self.run, ())
 
-    def process(self):
-        try:
-            conn, addr = self.socket.accept()
-        except OSError:
-            return
+    def run(self):
+        with self.run_lock:
+            try:
+                sock = socket(AF_INET, SOCK_STREAM)
+                sock.setblocking(False)
+                sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+                sock.bind(self.bind_addr)
+                sock.listen(5)
 
-        print()
-        print(f"===PROCESSING HTTP request from {addr}===")
+                while self.should_run:
+                    try:
+                        conn, addr = sock.accept()
+                    except OSError as e:
+                        if e.errno == errno.EAGAIN:
+                            continue
+                        raise
+                    start_new_thread(self.process, (conn,))
+            finally:
+                sock.close()
 
+    def stop(self):
+        self.should_run = False
+        while self.run_lock.locked():
+            pass
+
+    def process(self, conn):
         request = bytearray()
         while True:
             try:
-                chunk = conn.recv(512)
-                if chunk == b"":
-                    break
-                request.extend(chunk)
-                if b"\r\n\r\n" in request:
-                    break
+                chunk = conn.recv(4096)
             except OSError:
-                print("===DONE: aborted===")
                 return
+            if chunk == b"":
+                break
+            request += chunk
+            if b"\r\n\r\n" in request:
+                break
         request = request.decode("ISO-8859-1")
 
-        print("=====DEBUG REQUEST=====")
-        print(request)
-        print("===END DEBUG REQUEST===")
-
-        req_lines = request.split("\r\n")
-
-        if " " not in req_lines[0]:
-            print("===DONE: malformed===")
-            return
-        method, uri, version = req_lines[0].split(" ")
-        uri, qs = uri.split("?") if "?" in uri else (uri, "")
-        qps = dict(
-            url_decode(qp) if "=" in qp else [url_decode(qp), True]
-            for qp in qs.split("&") if qp != ""
-        )
-
-        headers = dict(line.split(": ", 1) for line in req_lines[1:] if ": " in line)
-
         try:
-            status, out_headers, response = getattr(self, method)(uri, qps, headers)
+            status, headers, data = self.get_response(request)
         except Exception as e:
-            status, out_headers, response = 500, {}, f"{type(e)}: {str(e)}"
+            # get_response includes a try/except to catch view exceptions (status 500)
+            # If it throws an exception, that means the request is malformed (status 400)
+            status, headers, data = 400, {}, f"{type(e)}: {str(e)}"
 
-        header_str = "".join(f"{k}: {v}\r\n" for k, v in out_headers.items())
-        response_headers = f"HTTP/1.1 {status}\r\n{header_str}\r\n"
+        headers = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+        response = f"HTTP/1.1 {status} \r\n{headers}\r\n"
 
-        print("=====DEBUG RESPONSE=====")
-        print(response_headers)
-        print("===END DEBUG RESPONSE===")
+        if type(data) != bytes:
+            if type(data) != str:
+                data = str(data)
+            data = data.encode("ISO-8859-1")
 
-        if type(response) != bytes:
-            if type(response) != str:
-                response = str(response)
-            response = response.encode("ISO-8859-1")
-
-        conn.send(response_headers.encode() + response)
+        conn.send(response.encode() + data)
         conn.close()
-        print(f"===DONE: status {status}===")
 
-    def GET(self, uri, qps, headers):
+    def get_response(self, request):
+        request_lines = request.split("\r\n")
+
+        method, uri, _ = request_lines[0].split(" ")
+        if method != "GET":
+            return 501, {}, ""
+
+        headers = dict(line.split(": ", 1) for line in request_lines[1:] if ": " in line)
         if headers.get("Host", self.ip_addr) != self.ip_addr:
             return 303, {"Location": f"http://{self.ip_addr}"}, ""
 
-        uri = uri.rstrip("/")
-        if uri == "":
-            uri = "/"
+        path, query = uri.split("?", 1) if "?" in uri else (uri, "")
+        query_dict = dict(
+            url_decode(qp) if "=" in qp else (url_decode(qp), True)
+            for qp in query.split("&") if qp != ""
+        )
 
-        view = self.urlconf.get(uri, template)
-        return view(uri, qps, headers)
+        path = path.rstrip("/")
+        if path == "":
+            path = "/"
 
+        view = self.urlconf.get(path, file_view)
 
-# if __name__ == "__main__":
-#     from urlconf import urlconf
-#     http_server = HTTPServer(urlconf, ("0.0.0.0", 8080))
-#     while True:
-#         http_server.process()
+        try:
+            return view(path, query_dict, headers)
+        except Exception as e:
+            print_exception(e)
+            return 500, {}, f"{type(e)}: {str(e)}"

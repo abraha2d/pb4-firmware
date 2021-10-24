@@ -1,6 +1,7 @@
 def url_decode(enc):
     if "=" in enc:
-        return [url_decode(e) for e in enc.split("=")]
+        parts = enc.split("=", 1)
+        return url_decode(parts[0]), url_decode(parts[1])
 
     dec = enc.replace("+", " ")
 
