@@ -28,7 +28,12 @@ class DNSServer:
                 sock.bind(self.bind_addr)
 
                 while self.should_run:
-                    self.process(sock)
+                    try:
+                        self.process(sock)
+                    except OSError as e:
+                        if e.errno == -1:
+                            continue
+                        raise
             finally:
                 sock.close()
 

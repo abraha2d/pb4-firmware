@@ -4,7 +4,6 @@ from captive_portal.http.views import file_view
 
 from config import set_wlan_config
 from platform import wlan_sta
-from utils import do_scan
 
 
 def connect(path, query_dict, headers):
@@ -28,11 +27,7 @@ def index(path, query_dict, headers):
 
 
 def scan(path, query_dict, headers):
-    networks = do_scan()
-    for ssid, aps in networks.items():
-        print(f"SSID: {ssid}")
-        for ap in aps:
-            print(f"  {ap}")
+    networks = wlan_sta.scan()
     return 200, {}, f'{dumps(networks)}'
 
 
