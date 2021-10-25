@@ -1,4 +1,5 @@
 import micropython; micropython.alloc_emergency_exception_buf(100)
+from binascii import hexlify
 
 from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
@@ -9,7 +10,10 @@ from views import urlconf
 
 
 def do_setup():
+    mac = hexlify(wlan_sta.config('mac'))[-6:].decode().upper()
+
     wlan_ap.active(True)
+    wlan_ap.config(essid=f"PB4_{mac}")
     ip_address = wlan_ap.ifconfig()[0]
 
     dns_server = DNSServer(ip_address)
