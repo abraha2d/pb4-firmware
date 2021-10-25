@@ -6,6 +6,7 @@ from .views import file_view
 
 
 def get_mac_address(p, q, h):
+    sleep(1)
     return 200, {}, "4c:11:ae:db:d5:a9"
 
 

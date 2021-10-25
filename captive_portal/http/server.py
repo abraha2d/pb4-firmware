@@ -1,7 +1,11 @@
 from _thread import start_new_thread, allocate_lock
 from errno import EAGAIN
 from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, getaddrinfo, socket
-# from sys import print_exception
+
+try:
+    from sys import print_exception
+except ImportError:
+    print_exception = print
 
 from .utils import url_decode
 from .views import file_view
@@ -111,5 +115,5 @@ class HTTPServer:
         try:
             return view(path, query_dict, headers)
         except Exception as e:
-            # print_exception(e)
+            print_exception(e)
             return 500, {}, f"{type(e)}: {str(e)}"
