@@ -18,11 +18,18 @@ import { parseNetworks } from "./utils";
 
 const App = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [macAddress, setMacAddress] = useState("...");
   const [networks, setNetworks] = useState<Network[]>([]);
   const [selectedNetwork, setSelectedNetwork] = useState<Network | false>();
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
+
+  const fetchMacAddress = () => {
+    fetch("/id")
+      .then((r) => r.text())
+      .then(setMacAddress);
+  };
 
   const fetchNetworks = () => {
     setIsLoading(true);
@@ -34,6 +41,7 @@ const App = () => {
   };
 
   useEffect(() => {
+    fetchMacAddress();
     fetchNetworks();
   }, []);
 
@@ -128,7 +136,7 @@ const App = () => {
 
                 <div className="mt-3 d-flex justify-content-between align-items-center">
                   <small className="text-muted">
-                    device mac address: 4c:11:ae:db:d5:a9
+                    device mac address: {macAddress}
                   </small>
 
                   <Button

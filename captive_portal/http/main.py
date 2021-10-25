@@ -5,6 +5,10 @@ from .server import HTTPServer
 from .views import file_view
 
 
+def get_mac_address(p, q, h):
+    return 200, {}, "4c:11:ae:db:d5:a9"
+
+
 def scan(p, q, h):
     sleep(5)
     results = [
@@ -24,6 +28,7 @@ def scan(p, q, h):
 def main():
     http_server = HTTPServer("localhost:4000", {
         "/": lambda p, q, h: file_view("/index.html", q, h),
+        "/id": get_mac_address,
         "/scan": scan,
     }, ("", 4000))
 
