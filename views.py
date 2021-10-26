@@ -2,7 +2,6 @@ from binascii import hexlify
 from json import dumps
 
 from captive_portal.http.views import file_view
-
 from config import set_wlan_config
 from upy_platform import wlan_sta
 
@@ -33,8 +32,7 @@ def index(path, query_dict, headers):
 
 def scan(path, query_dict, headers):
     networks = wlan_sta.scan()
-    for network in networks:
-        network[1] = hexlify(network[1], ":")
+    networks = [network[:1] + (hexlify(network[1], ":"),) + network[2:] for network in networks]
     return 200, {}, dumps(networks)
 
 
