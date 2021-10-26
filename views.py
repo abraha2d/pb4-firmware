@@ -33,6 +33,8 @@ def index(path, query_dict, headers):
 
 def scan(path, query_dict, headers):
     networks = wlan_sta.scan()
+    for network in networks:
+        network[1] = hexlify(network[1], ":")
     return 200, {}, dumps(networks)
 
 

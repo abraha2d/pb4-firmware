@@ -1,4 +1,5 @@
-# from json import dumps
+from binascii import hexlify
+from json import dumps
 from time import sleep
 
 from .server import HTTPServer
@@ -12,19 +13,21 @@ def get_mac_address(p, q, h):
 
 def scan(p, q, h):
     sleep(2)
-    # results = [
-    #     ["WHF Blue", "ˆÜ–_*Þ", 11, -62, 3, False],
-    #     ["WHF Guest", "ŠÜ–_*Þ", 11, -62, 0, False],
-    #     ["whfiot", "šÜ–_*Þ", 11, -62, 3, False],
-    #     ["WHF Blue", "tƒÂÓT@", 1, -68, 3, False],
-    #     ["whfiot", "vƒÂ£T@", 1, -68, 3, False],
-    #     ["WHF Guest", "vƒÂ“T@", 1, -69, 0, False],
-    #     ["WHF Blue", "´ûä‘8%", 6, -69, 3, False],
-    #     ["WHF Guest", "ºûä‘8%", 6, -70, 0, False],
-    #     ["whfiot", "¾ûä‘8%", 6, -70, 3, False],
-    # ]
-    # return 200, {}, dumps(results)
-    return 200, {}, """[["WHF Blue", "Ü_*Þ", 11, -66, 3, false], ["whfiot", "Ü_*Þ", 11, -66, 3, false], ["WHF Guest", "Ü_*Þ", 11, -67, 0, false], ["WHF Guest", "vÂT@", 1, -69, 0, false], ["whfiot", "vÂ£T@", 1, -69, 3, false], ["WHF Blue", "tÂÓT@", 1, -69, 3, false], ["WHF Blue", "´ûä8%", 6, -70, 3, false], ["WHF Guest", "ºûä8%", 6, -70, 0, false], ["whfiot", "¾ûä8%", 6, -71, 3, false]]"""
+    results = [
+        [b"WHF Blue", b'\x88\xdc\x96_*\xde', 11, -62, 3, False],
+        [b"WHF Guest", b'\x8a\xdc\x96_*\xde', 11, -62, 0, False],
+        [b"whfiot", b'\x9a\xdc\x96_*\xde', 11, -62, 3, False],
+        [b"WHF Blue", b't\x83\xc2\xd3T@', 1, -68, 3, False],
+        [b"whfiot", b'v\x83\xc2\xa3T@', 1, -68, 3, False],
+        [b"WHF Guest", b'v\x83\xc2\x93T@', 1, -69, 0, False],
+        [b"WHF Blue", b'\xb4\xfb\xe4\x918%', 6, -69, 3, False],
+        [b"WHF Guest", b'\xba\xfb\xe4\x918%', 6, -70, 0, False],
+        [b"whfiot", b'\xbe\xfb\xe4\x918%', 6, -70, 3, False],
+    ]
+    for result in results:
+        result[0] = result[0].decode()
+        result[1] = hexlify(result[1], ":").decode()
+    return 200, {}, dumps(results)
 
 
 def main():
