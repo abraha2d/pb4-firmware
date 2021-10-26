@@ -104,9 +104,11 @@ const App = () => {
                 {selectedNetwork === false ? (
                   <FloatingLabel className="mt-3" label="ssid">
                     <Form.Control
+                      maxLength={32}
                       name="ssid"
                       onChange={(e) => setSsid(e.target.value)}
                       readOnly={isConnecting}
+                      required
                       value={ssid}
                     />
                   </FloatingLabel>
@@ -125,9 +127,12 @@ const App = () => {
                   <FloatingLabel className="mt-3" label="password">
                     <Form.Control
                       autoComplete="new-password"
+                      minLength={5}
+                      maxLength={63}
                       name="password"
                       onChange={(e) => setPassword(e.target.value)}
                       readOnly={isConnecting}
+                      required={selectedNetwork !== false}
                       type="password"
                       value={password}
                     />

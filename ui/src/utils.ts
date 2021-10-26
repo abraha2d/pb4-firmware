@@ -1,5 +1,13 @@
 import { Network, RawNetwork } from "./types";
 
+export enum NETWORK_AUTHMODES {
+  Open,
+  WEP,
+  WPA_PSK,
+  WPA2_PSK,
+  WPA_WPA2_PSK,
+}
+
 export const parseNetworks = (rawNetworks: RawNetwork[]) =>
   rawNetworks
     .map(
