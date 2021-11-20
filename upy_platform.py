@@ -5,6 +5,8 @@ from esp32 import NVS
 from machine import I2C, Pin, PWM, Signal, TouchPad
 from network import AP_IF, STA_IF, WLAN
 
+boot = Signal(0, Pin.IN, invert=True)
+
 exhaust = Signal(13, Pin.OUT, value=0)
 flush_1 = Signal(25, Pin.OUT, value=0)
 flush_2 = Signal(26, Pin.OUT, value=0)
@@ -38,9 +40,12 @@ class StatusLED:
     WHITE = [1, 1, 1]
     YELLOW = [1, 1, 0]
 
-    APP_TIMESYNC = MAGENTA, False
+    APP_BOOTING = MAGENTA, False
+    APP_RESETTING = MAGENTA, True
+
     APP_IDLE = GREEN, False
     APP_RUNNING = GREEN, True
+
     APP_ERROR = RED, False
 
     NETWORK_SCANNING = BLUE, True
