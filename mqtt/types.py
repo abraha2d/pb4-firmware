@@ -16,8 +16,10 @@ MQTTConnectFlagsLayout = {
     "clean_session": 0 | BFUINT8 | 1 << BF_POS | 1 << BF_LEN,
 }
 
-MQTTKeepAliveLayout = {
-    "keepalive": 0 | UINT16,
+MQTTAckLayout = {
+    "header": (0, MQTTHeaderLayout),
+    "length": 1 | UINT8,
+    "packet_id": 2 | UINT16,
 }
 
 MQTTConnackLayout = {
@@ -25,10 +27,4 @@ MQTTConnackLayout = {
     "length": 1 | UINT8,
     "session_present": 2 | BFUINT8 | 0 << BF_POS | 1 << BF_LEN,
     "return_code": 3 | UINT8,
-}
-
-MQTTAckLayout = {
-    "header": (0, MQTTHeaderLayout),
-    "length": 1 | UINT8,
-    "packet_id": 2 | UINT16,
 }

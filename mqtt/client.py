@@ -1,5 +1,6 @@
 from _thread import allocate_lock, start_new_thread
 from socket import getaddrinfo, socket, AF_INET, SOCK_STREAM
+from time import sleep
 
 from uctypes import struct, addressof, BIG_ENDIAN
 
@@ -10,9 +11,16 @@ from .constants import (
     TYPE_CONNACK,
     TYPE_PUBLISH,
     TYPE_PUBACK,
+    TYPE_PUBREC,
     TYPE_PUBREL,
+    TYPE_PUBCOMP,
     TYPE_SUBSCRIBE,
-    TYPE_SUBACK, TYPE_PINGREQ, TYPE_PINGRESP, TYPE_DISCONNECT,
+    TYPE_SUBACK,
+    TYPE_UNSUBSCRIBE,
+    TYPE_UNSUBACK,
+    TYPE_PINGREQ,
+    TYPE_PINGRESP,
+    TYPE_DISCONNECT,
 )
 from .types import MQTTHeaderLayout, MQTTConnectFlagsLayout, MQTTConnackLayout, MQTTAckLayout
 from .utils import write_varlen_int
@@ -27,19 +35,11 @@ class MQTTClient:
         self.run_lock = allocate_lock()
         self.should_run = False
 
-    def start(self):
-        self.should_run = True
-        start_new_thread(self.run, ())
-
-    def run(self):
-        with self.run_lock:
-            try:
-                sockaddr = getaddrinfo(self.server, 1883)[0][-1]
-                sock = socket(AF_INET, SOCK_STREAM)
-                sock.setblocking(False)
-                sock.connect(sockaddr)
-            finally:
-                sock.close()
+    def get_packet_id(self):
+        self.packet_id += 1
+        if self.packet_id > 65536:
+            self.packet_id = 1
+        return self.packet_id
 
     def send_connect(self, sock, lwt=None, keepalive=0):
         header_data = bytes(2)
@@ -59,7 +59,7 @@ class MQTTClient:
 
             flags.will = 1
             flags.will_qos = lwt[2]
-            flags.will_retain = lwt[3]
+            flags.will_retain = 1 if lwt[3] else 0
 
             will_topic_data = len(lwt[0]).to_bytes(2, "big") + lwt[0].encode()
             will_message_data = len(lwt[1]).to_bytes(2, "big") + lwt[1].encode()
@@ -162,13 +162,62 @@ class MQTTClient:
         header.type = TYPE_DISCONNECT
         sock.send(header_data)
 
-    def get_packet_id(self):
-        self.packet_id += 1
-        if self.packet_id > 65536:
-            self.packet_id = 1
-        return self.packet_id
+    def connect(self, sock):
+        lwt = [
+            f"/pb4/devices/{self.client_id}/status",
+            "0",
+            1,
+            True,
+        ]
+        self.send_connect(sock, lwt=lwt, keepalive=10)
+        self.recv_connack(sock)
+
+    def publish(self, sock, topic, message, qos=0, retain=False):
+        assert 0 <= qos <= 2
+        pid = self.send_publish(sock, topic, message, qos, retain)
+        if qos == 1:
+            self.recv_puback(sock, pid)
+        elif qos == 2:
+            self.recv_puback(sock, pid, TYPE_PUBREC)
+            self.send_pubrel(sock, pid)
+            self.recv_puback(sock, pid, TYPE_PUBCOMP)
+
+    def subscribe(self, sock, topics):
+        pid = self.send_subscribe(sock, topics)
+        self.recv_suback(sock, pid)
+
+    def unsubscribe(self, sock, topics):
+        topic_list = [(topic,) for topic in topics]
+        pid = self.send_subscribe(sock, topic_list, TYPE_UNSUBSCRIBE)
+        self.recv_suback(sock, pid, TYPE_UNSUBACK)
+
+    def ping(self, sock):
+        self.send_pingreq(sock)
+        self.recv_pingresp(sock)
+
+    def start(self):
+        self.should_run = True
+        start_new_thread(self.run, ())
+
+    def run(self):
+        with self.run_lock:
+            try:
+                sockaddr = getaddrinfo(self.server, 1883)[0][-1]
+                sock = socket(AF_INET, SOCK_STREAM)
+                sock.setblocking(False)
+                sock.connect(sockaddr)
+                self.connect(sock)
+
+                while True:
+                    sleep(1)
+                    self.ping(sock)
+            finally:
+                sock.close()
 
     def stop(self):
         self.should_run = False
         while self.run_lock.locked():
             pass
+
+    def process(self, sock):
+        pass
