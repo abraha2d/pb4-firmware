@@ -5,6 +5,8 @@ from time import sleep_ms, time
 from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
 
+from mqtt.client import MQTTClient
+
 from config import erase_wlan_config, get_wlan_config
 from upy_platform import boot, status, wlan_ap, wlan_sta
 from utils import get_device_name
@@ -70,7 +72,11 @@ def do_reset():
     erase_wlan_config()
 
 
+mqtt_client = None
+
+
 def main():
+    global mqtt_client
     print("main.main: Booting... press BOOT within the next second to factory reset.")
     status.app_state = status.APP_BOOTING
     sleep_ms(1000)
@@ -86,7 +92,10 @@ def main():
 
     do_connect()
 
-    status.app_stat = status.APP_IDLE
+    mqtt_client = MQTTClient()
+    mqtt_client.start()
+
+    status.app_state = status.APP_IDLE
 
 
 if __name__ == '__main__':
