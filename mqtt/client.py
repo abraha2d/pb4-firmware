@@ -101,13 +101,16 @@ class MQTTClient:
         puback_data = sock.recv(4)
         puback = struct(addressof(puback_data), MQTTAckLayout, BIG_ENDIAN)
         assert puback.header.type == ack_type
+        if ack_type == TYPE_PUBREL:
+            assert puback.header.qos == 1
         assert puback.packet_id == packet_id
 
-    def send_pubrel(self, sock, packet_id):
+    def send_puback(self, sock, packet_id, ack_type=TYPE_PUBACK):
         pubrel_data = bytes(4)
         pubrel = struct(addressof(pubrel_data), MQTTAckLayout, BIG_ENDIAN)
-        pubrel.header.type = TYPE_PUBREL
-        pubrel.header.qos = 1
+        pubrel.header.type = ack_type
+        if ack_type == TYPE_PUBREL:
+            pubrel.header.qos = 1
         pubrel.length = 2
         pubrel.packet_id = packet_id
         sock.send(pubrel_data)
@@ -179,7 +182,7 @@ class MQTTClient:
             self.recv_puback(sock, pid)
         elif qos == 2:
             self.recv_puback(sock, pid, TYPE_PUBREC)
-            self.send_pubrel(sock, pid)
+            self.send_puback(sock, pid, TYPE_PUBREL)
             self.recv_puback(sock, pid, TYPE_PUBCOMP)
 
     def subscribe(self, sock, topics):
