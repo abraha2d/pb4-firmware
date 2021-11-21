@@ -27,7 +27,7 @@ MQTTConnackLayout = {
     "return_code": 3 | UINT8,
 }
 
-MQTTPubackLayout = {
+MQTTAckLayout = {
     "header": (0, MQTTHeaderLayout),
     "length": 1 | UINT8,
     "packet_id": 2 | UINT16,
