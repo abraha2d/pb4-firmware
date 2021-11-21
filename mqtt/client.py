@@ -4,8 +4,16 @@ from socket import getaddrinfo, socket, AF_INET, SOCK_STREAM
 from uctypes import struct, addressof, BIG_ENDIAN
 
 from utils import get_device_mac
-from .constants import TYPE_CONNECT, PROTOCOL, TYPE_CONNACK, TYPE_PUBLISH, TYPE_PUBACK, TYPE_PUBREL, TYPE_SUBSCRIBE, \
-    TYPE_SUBACK, TYPE_UNSUBSCRIBE, TYPE_UNSUBACK
+from .constants import (
+    PROTOCOL,
+    TYPE_CONNECT,
+    TYPE_CONNACK,
+    TYPE_PUBLISH,
+    TYPE_PUBACK,
+    TYPE_PUBREL,
+    TYPE_SUBSCRIBE,
+    TYPE_SUBACK, TYPE_PINGREQ, TYPE_PINGRESP, TYPE_DISCONNECT,
+)
 from .types import MQTTHeaderLayout, MQTTConnectFlagsLayout, MQTTConnackLayout, MQTTAckLayout
 from .utils import write_varlen_int
 
@@ -136,6 +144,23 @@ class MQTTClient:
         for i in range(suback.length - 2):
             return_code = sock.recv(1)
             assert return_code != b"\x80"
+
+    def send_pingreq(self, sock):
+        header_data = bytes(2)
+        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+        header.type = TYPE_PINGREQ
+        sock.send(header_data)
+
+    def recv_pingresp(self, sock):
+        header_data = sock.recv(2)
+        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+        assert header.type == TYPE_PINGRESP
+
+    def send_disconnect(self, sock):
+        header_data = bytes(2)
+        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+        header.type = TYPE_DISCONNECT
+        sock.send(header_data)
 
     def get_packet_id(self):
         self.packet_id += 1
