@@ -23,7 +23,7 @@ from .constants import (
     TYPE_DISCONNECT,
 )
 from .types import MQTTHeaderLayout, MQTTConnectFlagsLayout, MQTTConnackLayout, MQTTAckLayout
-from .utils import write_varlen_int
+from .utils import write_varlen_int, read_varlen_int
 
 
 class MQTTClient:
@@ -88,7 +88,7 @@ class MQTTClient:
         topic_name_data = len(topic).to_bytes(2, "big") + topic.encode()
         packet_id = self.get_packet_id()
         packet_id_data = packet_id.to_bytes(2, "big")
-        message_data = message.encode()
+        message_data = message.encode() if type(message) == str else message
 
         data = topic_name_data + packet_id_data + message_data
         data_len = write_varlen_int(len(data))
@@ -97,13 +97,20 @@ class MQTTClient:
 
         return packet_id
 
-    def recv_puback(self, sock, packet_id, ack_type=TYPE_PUBACK):
-        puback_data = sock.recv(4)
-        puback = struct(addressof(puback_data), MQTTAckLayout, BIG_ENDIAN)
-        assert puback.header.type == ack_type
-        if ack_type == TYPE_PUBREL:
-            assert puback.header.qos == 1
-        assert puback.packet_id == packet_id
+    def recv_publish(self, sock):
+        header_data = sock.recv(2)
+        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+        assert header.type == TYPE_PUBLISH
+
+        data_len = read_varlen_int(sock)
+        data = sock.recv(data_len)
+
+        topic_len = int.from_bytes(data[:2], "big")
+        topic = data[2:2+topic_len].decode()
+        packet_id = int.from_bytes(data[2+topic_len:4+topic_len], "big")
+        message = data[4+topic_len:]
+
+        return topic, message, header.qos, header.retain == 1, packet_id
 
     def send_puback(self, sock, packet_id, ack_type=TYPE_PUBACK):
         pubrel_data = bytes(4)
@@ -114,6 +121,15 @@ class MQTTClient:
         pubrel.length = 2
         pubrel.packet_id = packet_id
         sock.send(pubrel_data)
+
+    def recv_puback(self, sock, packet_id, ack_type=TYPE_PUBACK):
+        puback_data = sock.recv(4)
+        puback = struct(addressof(puback_data), MQTTAckLayout, BIG_ENDIAN)
+        assert puback.header.type == ack_type
+        if ack_type == TYPE_PUBREL:
+            assert puback.header.qos == 1
+        assert puback.length == 2
+        assert puback.packet_id == packet_id
 
     def send_subscribe(self, sock, topics, sub_type=TYPE_SUBSCRIBE):
         assert len(topics) > 0
