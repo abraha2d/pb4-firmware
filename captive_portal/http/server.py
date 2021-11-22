@@ -2,6 +2,8 @@ from _thread import start_new_thread, allocate_lock
 from errno import EAGAIN
 from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, getaddrinfo, socket
 
+from utime import sleep_ms
+
 try:
     from sys import print_exception
 except ImportError:
@@ -34,6 +36,7 @@ class HTTPServer:
                 sock.listen(5)
 
                 while self.should_run:
+                    sleep_ms(1)
                     if self.num_threads >= 4:
                         continue
 

@@ -1,6 +1,6 @@
 import micropython; micropython.alloc_emergency_exception_buf(100)
 from machine import reset
-from time import sleep_ms, time
+from utime import sleep_ms, time
 
 from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
@@ -9,7 +9,7 @@ from mqtt.client import MQTTClient
 
 from config import erase_wlan_config, get_wlan_config
 from upy_platform import boot, status, wlan_ap, wlan_sta
-from utils import get_device_name
+from utils import get_device_name, get_device_mac
 from views import urlconf
 
 
@@ -92,8 +92,14 @@ def main():
 
     do_connect()
 
-    mqtt_client = MQTTClient()
+    offline = [f"/pb4/devices/{get_device_mac()}/status", "0", 1, True]
+    online = offline[:]
+    online[1] = "1"
+
+    mqtt_client = MQTTClient(lwt=offline, keepalive=10)
     mqtt_client.start()
+
+    mqtt_client.publish(*online)
 
     status.app_state = status.APP_IDLE
 

@@ -16,15 +16,19 @@ MQTTConnectFlagsLayout = {
     "clean_session": 0 | BFUINT8 | 1 << BF_POS | 1 << BF_LEN,
 }
 
-MQTTAckLayout = {
-    "header": (0, MQTTHeaderLayout),
+MQTTConnAckLayout = {
+    "length": 1 | UINT8,
+    "session_present": 2 | BFUINT8 | 0 << BF_POS | 1 << BF_LEN,
+    "return_code": 3 | UINT8,
+}
+
+MQTTAckRecvLayout = {
     "length": 1 | UINT8,
     "packet_id": 2 | UINT16,
 }
 
-MQTTConnackLayout = {
+MQTTAckSendLayout = {
     "header": (0, MQTTHeaderLayout),
     "length": 1 | UINT8,
-    "session_present": 2 | BFUINT8 | 0 << BF_POS | 1 << BF_LEN,
-    "return_code": 3 | UINT8,
+    "packet_id": 2 | UINT16,
 }

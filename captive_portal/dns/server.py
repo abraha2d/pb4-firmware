@@ -3,6 +3,7 @@ from errno import EAGAIN
 from socket import AF_INET, SO_REUSEADDR, SOCK_DGRAM, SOL_SOCKET, getaddrinfo, socket
 
 from uctypes import BIG_ENDIAN, addressof, struct
+from utime import sleep_ms
 
 from .types import DNSHeaderLayout
 from .utils import get_qname_end, get_answer
@@ -28,6 +29,7 @@ class DNSServer:
                 sock.bind(self.bind_addr)
 
                 while self.should_run:
+                    sleep_ms(1)
                     try:
                         self.process(sock)
                     except OSError as e:

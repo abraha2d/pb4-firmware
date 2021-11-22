@@ -1,8 +1,8 @@
 from _thread import allocate_lock, start_new_thread
+from errno import EAGAIN, ECONNRESET
 from socket import getaddrinfo, socket, AF_INET, SOCK_STREAM
-from time import sleep
 
-from uctypes import struct, addressof, BIG_ENDIAN
+from utime import sleep_ms, time
 
 from utils import get_device_mac
 from .constants import (
@@ -22,15 +22,53 @@ from .constants import (
     TYPE_PINGRESP,
     TYPE_DISCONNECT,
 )
-from .types import MQTTHeaderLayout, MQTTConnectFlagsLayout, MQTTConnackLayout, MQTTAckLayout
-from .utils import write_varlen_int, read_varlen_int
+from .types import (
+    MQTTHeaderLayout,
+    MQTTConnectFlagsLayout,
+    MQTTConnAckLayout,
+    MQTTAckRecvLayout,
+    MQTTAckSendLayout,
+)
+from .utils import (
+    new_struct,
+    recv_struct,
+    encode_varlen_int,
+    recv_varlen_int,
+    encode_int,
+    decode_int,
+    encode_str,
+    decode_str,
+)
 
 
 class MQTTClient:
-    def __init__(self, server="pb4_control.local", client_id=get_device_mac()):
+    def __init__(
+            self,
+            server="pb4_control.local",
+            client_id=get_device_mac(),
+            clean_session=False,
+            lwt=None,
+            username=None,
+            password=None,
+            keepalive=0,
+    ):
         self.server = server
         self.client_id = client_id
+        self.clean_session = clean_session
+        self.lwt = lwt
+        self.username = username
+        self.password = password
+        self.keepalive = keepalive
+
+        self.sock = None
+        self.connected = False
+        self.last_activity = time()
         self.packet_id = 0
+        self.pings = 0
+
+        self.publishes = []
+        self.subscribes = []
+        self.unsubscribes = []
 
         self.run_lock = allocate_lock()
         self.should_run = False
@@ -41,178 +79,179 @@ class MQTTClient:
             self.packet_id = 1
         return self.packet_id
 
-    def send_connect(self, sock, lwt=None, keepalive=0):
-        header_data = bytes(2)
-        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+    def connect(self):
+        header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_CONNECT
 
-        flags_data = bytes(1)
-        flags = struct(addressof(flags_data), MQTTConnectFlagsLayout, BIG_ENDIAN)
+        flags, flags_data = new_struct(MQTTConnectFlagsLayout)
+        flags.clean_session = self.clean_session
 
-        keepalive_data = keepalive.to_bytes(2, "big")
-        client_id_data = len(self.client_id).to_bytes(2, "big") + self.client_id.encode()
+        parts = [
+            PROTOCOL,
+            flags_data,
+            encode_int(self.keepalive),
+            encode_str(self.client_id),
+        ]
 
-        data = PROTOCOL + flags_data + keepalive_data + client_id_data
-
-        if lwt is not None:
-            assert 0 <= lwt[2] <= 2
-
+        if self.lwt is not None:
+            parts.extend(map(encode_str, self.lwt[:2]))
             flags.will = 1
-            flags.will_qos = lwt[2]
-            flags.will_retain = 1 if lwt[3] else 0
+            flags.will_qos = self.lwt[2]
+            flags.will_retain = self.lwt[3]
 
-            will_topic_data = len(lwt[0]).to_bytes(2, "big") + lwt[0].encode()
-            will_message_data = len(lwt[1]).to_bytes(2, "big") + lwt[1].encode()
+        if self.username is not None:
+            parts.append(encode_str(self.username))
+            flags.username = 1
 
-            data += will_topic_data + will_message_data
+        if self.password is not None:
+            parts.append(encode_str(self.password))
+            flags.password = 1
 
-        data_len = write_varlen_int(len(data))
-        data = header_data + data_len + data
-        sock.send(data)
+        data = b"".join(parts)
+        data_len = encode_varlen_int(len(data))
+        self.sock.send(header_data + data_len + data)
+        self.last_activity = time()
+        self.connected = False
 
-    def recv_connack(self, sock):
-        connack_data = sock.recv(4)
-        connack = struct(addressof(connack_data), MQTTConnackLayout, BIG_ENDIAN)
-        assert connack.header.type == TYPE_CONNACK
-        assert connack.return_code == 0
+    def publish(self, topic, message, qos=0, retain=False):
+        while not self.connected:
+            sleep_ms(1)
 
-    def send_publish(self, sock, topic, message, qos=0, retain=False):
-        assert 0 <= qos <= 2
-
-        header_data = bytes(2)
-        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+        header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_PUBLISH
         header.qos = qos
-        header.retain = 1 if retain else 0
+        header.retain = retain
 
-        topic_name_data = len(topic).to_bytes(2, "big") + topic.encode()
-        packet_id = self.get_packet_id()
-        packet_id_data = packet_id.to_bytes(2, "big")
-        message_data = message.encode() if type(message) == str else message
+        data = encode_str(topic)
+        if qos > 0:
+            packet_id = self.get_packet_id()
+            data += encode_int(packet_id)
+            self.publishes.append(packet_id)
+        data += message
 
-        data = topic_name_data + packet_id_data + message_data
-        data_len = write_varlen_int(len(data))
-        data = header_data + data_len + data
-        sock.send(data)
+        data_len = encode_varlen_int(len(data))
+        self.sock.send(header_data + data_len + data)
+        self.last_activity = time()
 
-        return packet_id
-
-    def recv_publish(self, sock):
-        header_data = sock.recv(2)
-        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
-        assert header.type == TYPE_PUBLISH
-
-        data_len = read_varlen_int(sock)
-        data = sock.recv(data_len)
-
-        topic_len = int.from_bytes(data[:2], "big")
-        topic = data[2:2+topic_len].decode()
-        packet_id = int.from_bytes(data[2+topic_len:4+topic_len], "big")
-        message = data[4+topic_len:]
-
-        return topic, message, header.qos, header.retain == 1, packet_id
-
-    def send_puback(self, sock, packet_id, ack_type=TYPE_PUBACK):
-        pubrel_data = bytes(4)
-        pubrel = struct(addressof(pubrel_data), MQTTAckLayout, BIG_ENDIAN)
-        pubrel.header.type = ack_type
+    def send_puback(self, packet_id, ack_type):
+        puback, puback_data = new_struct(MQTTAckSendLayout)
+        puback.header.type = ack_type
         if ack_type == TYPE_PUBREL:
-            pubrel.header.qos = 1
-        pubrel.length = 2
-        pubrel.packet_id = packet_id
-        sock.send(pubrel_data)
+            puback.header.qos = 1
+        puback.length = 2
+        puback.packet_id = packet_id
+        self.sock.send(puback_data)
+        self.last_activity = time()
 
-    def recv_puback(self, sock, packet_id, ack_type=TYPE_PUBACK):
-        puback_data = sock.recv(4)
-        puback = struct(addressof(puback_data), MQTTAckLayout, BIG_ENDIAN)
-        assert puback.header.type == ack_type
-        if ack_type == TYPE_PUBREL:
-            assert puback.header.qos == 1
-        assert puback.length == 2
-        assert puback.packet_id == packet_id
+    def send_subscribe(self, topics, sub_type):
+        while not self.connected:
+            sleep_ms(1)
 
-    def send_subscribe(self, sock, topics, sub_type=TYPE_SUBSCRIBE):
-        assert len(topics) > 0
-
-        header_data = bytes(2)
-        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+        header, header_data = new_struct(MQTTHeaderLayout)
         header.type = sub_type
         header.qos = 1
 
         packet_id = self.get_packet_id()
-        packet_id_data = packet_id.to_bytes(2, "big")
+        parts = [encode_int(packet_id)]
 
-        topic_data = b""
-        for topic in topics:
-            assert 0 <= topic[1] <= 2
-            topic_data += len(topic[0]).to_bytes(2, "big") + topic[0].encode() + topic[1].to_bytes(1, "big")
+        if sub_type == TYPE_SUBSCRIBE:
+            parts.extend(encode_str(topic[0]) + encode_int(topic[1]) for topic in topics)
+            self.subscribes.append(packet_id)
+        else:
+            assert sub_type == TYPE_UNSUBSCRIBE
+            parts.extend(map(encode_str, topics))
+            self.unsubscribes.append(packet_id)
 
-        data = packet_id_data + topic_data
-        data_len = write_varlen_int(len(data))
-        data = header_data + data_len + data
-        sock.send(data)
+        data = b"".join(parts)
+        data_len = encode_varlen_int(len(data))
+        self.sock.send(header_data + data_len + data)
+        self.last_activity = time()
 
-        return packet_id
+    def subscribe(self, topics):
+        self.send_subscribe(topics, TYPE_SUBSCRIBE)
 
-    def recv_suback(self, sock, packet_id, ack_type=TYPE_SUBACK):
-        suback_data = sock.recv(4)
-        suback = struct(addressof(suback_data), MQTTAckLayout, BIG_ENDIAN)
-        assert suback.header.type == ack_type
-        assert suback.packet_id == packet_id
+    def unsubscribe(self, topics):
+        self.send_subscribe(topics, TYPE_UNSUBSCRIBE)
+
+    def send_pingreq(self):
+        header, header_data = new_struct(MQTTHeaderLayout)
+        header.type = TYPE_PINGREQ
+        self.sock.send(header_data + b"\x00")
+        self.last_activity = time()
+        self.pings += 1
+
+    def send_disconnect(self):
+        self.connected = False
+        header, header_data = new_struct(MQTTHeaderLayout)
+        header.type = TYPE_DISCONNECT
+        self.sock.send(header_data + b"\x00")
+        self.last_activity = time()
+
+    def recv_connack(self, header):
+        assert header.type == TYPE_CONNACK
+        connack, connack_data = recv_struct(self.sock, MQTTConnAckLayout)
+        # TODO: Handle unexpected session present
+        # TODO: Handle return code != 0
+        self.connected = True
+
+    def recv_publish(self, header):
+        assert header.type == TYPE_PUBLISH
+        data_len = recv_varlen_int(self.sock)
+        data = self.sock.recv(data_len)
+
+        topic, data = decode_str(data)
+
+        if header.qos != 0:
+            packet_id, data = decode_int(data)
+            self.send_puback(packet_id, TYPE_PUBREC if header.qos == 2 else TYPE_PUBACK)
+
+        print(f"{topic} = {data} (qos={header.qos}, retain={header.retain})")
+        return topic, data, header.qos, header.retain == 1
+
+    def recv_puback(self, header):
+        puback, puback_data = recv_struct(self.sock, MQTTAckRecvLayout)
+        if header.type == TYPE_PUBACK or header.type == TYPE_PUBCOMP:
+            try:
+                self.publishes.remove(puback.packet_id)
+            except ValueError:
+                # TODO: Handle "object not in sequence"
+                pass
+        else:
+            assert header.type == TYPE_PUBREC or header.type == TYPE_PUBREL
+            self.send_puback(puback.packet_id, header.type + 1)
+
+    def recv_suback(self, header):
+        suback, suback_data = recv_struct(self.sock, MQTTAckRecvLayout)
+        try:
+            if header.type == TYPE_SUBACK:
+                self.subscribes.remove(suback.packet_id)
+            else:
+                assert header.type == TYPE_UNSUBACK
+                self.unsubscribes.remove(suback.packet_id)
+        except ValueError:
+            # TODO: Handle "object not in sequence"
+            pass
 
         for i in range(suback.length - 2):
-            return_code = sock.recv(1)
-            assert return_code != b"\x80"
+            return_code = self.sock.recv(1)
+            # TODO: Handle return code
 
-    def send_pingreq(self, sock):
-        header_data = bytes(2)
-        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
-        header.type = TYPE_PINGREQ
-        sock.send(header_data)
-
-    def recv_pingresp(self, sock):
-        header_data = sock.recv(2)
-        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
+    def recv_pingresp(self, header):
+        self.sock.recv(1)
         assert header.type == TYPE_PINGRESP
+        self.pings -= 1
 
-    def send_disconnect(self, sock):
-        header_data = bytes(2)
-        header = struct(addressof(header_data), MQTTHeaderLayout, BIG_ENDIAN)
-        header.type = TYPE_DISCONNECT
-        sock.send(header_data)
-
-    def connect(self, sock):
-        lwt = [
-            f"/pb4/devices/{self.client_id}/status",
-            "0",
-            1,
-            True,
-        ]
-        self.send_connect(sock, lwt=lwt, keepalive=10)
-        self.recv_connack(sock)
-
-    def publish(self, sock, topic, message, qos=0, retain=False):
-        assert 0 <= qos <= 2
-        pid = self.send_publish(sock, topic, message, qos, retain)
-        if qos == 1:
-            self.recv_puback(sock, pid)
-        elif qos == 2:
-            self.recv_puback(sock, pid, TYPE_PUBREC)
-            self.send_puback(sock, pid, TYPE_PUBREL)
-            self.recv_puback(sock, pid, TYPE_PUBCOMP)
-
-    def subscribe(self, sock, topics):
-        pid = self.send_subscribe(sock, topics)
-        self.recv_suback(sock, pid)
-
-    def unsubscribe(self, sock, topics):
-        topic_list = [(topic,) for topic in topics]
-        pid = self.send_subscribe(sock, topic_list, TYPE_UNSUBSCRIBE)
-        self.recv_suback(sock, pid, TYPE_UNSUBACK)
-
-    def ping(self, sock):
-        self.send_pingreq(sock)
-        self.recv_pingresp(sock)
+    RECV_HELPER = {
+        TYPE_CONNACK: recv_connack,
+        TYPE_PUBLISH: recv_publish,
+        TYPE_PUBACK: recv_puback,
+        TYPE_PUBREC: recv_puback,
+        TYPE_PUBREL: recv_puback,
+        TYPE_PUBCOMP: recv_puback,
+        TYPE_SUBACK: recv_suback,
+        TYPE_UNSUBACK: recv_suback,
+        TYPE_PINGRESP: recv_pingresp,
+    }
 
     def start(self):
         self.should_run = True
@@ -220,23 +259,49 @@ class MQTTClient:
 
     def run(self):
         with self.run_lock:
-            try:
-                sockaddr = getaddrinfo(self.server, 1883)[0][-1]
-                sock = socket(AF_INET, SOCK_STREAM)
-                sock.setblocking(False)
-                sock.connect(sockaddr)
-                self.connect(sock)
+            while self.should_run:
+                try:
+                    sockaddr = getaddrinfo(self.server, 1883)[0][-1]
+                    self.sock = socket(AF_INET, SOCK_STREAM)
+                    self.sock.connect(sockaddr)
 
-                while True:
-                    sleep(1)
-                    self.ping(sock)
-            finally:
-                sock.close()
+                    self.connect()
+
+                    self.sock.setblocking(False)
+                    while self.should_run:
+                        sleep_ms(1)
+                        self.process()
+                except OSError as e:
+                    if e.errno == ECONNRESET:
+                        continue
+                    raise
+                finally:
+                    try:
+                        self.send_disconnect()
+                    except OSError:
+                        pass
+                    self.sock.close()
+                    self.sock = None
 
     def stop(self):
         self.should_run = False
         while self.run_lock.locked():
             pass
 
-    def process(self, sock):
-        pass
+    def process(self):
+        if time() - self.last_activity > self.keepalive:
+            self.send_pingreq()
+
+        try:
+            header, header_data = recv_struct(self.sock, MQTTHeaderLayout)
+        except OSError as e:
+            if e.errno == EAGAIN:
+                return
+            raise
+
+        try:
+            self.RECV_HELPER[header.type](self, header)
+        except KeyError:
+            # TODO: Handle unknown header type
+            print(f"mqtt.process: Unknown header type.")
+            pass
