@@ -92,14 +92,18 @@ def main():
 
     do_connect()
 
-    offline = [f"/pb4/devices/{get_device_mac()}/status", "0", 1, True]
-    online = offline[:]
-    online[1] = "1"
+    status_topic = f"/pb4/devices/{get_device_mac()}/status"
+    status_qos = 1
+    status_retain = True
 
-    mqtt_client = MQTTClient(lwt=offline, keepalive=10)
+    status_offline = [status_topic, "0", status_qos, status_retain]
+    status_online = [status_topic, "1", status_qos, status_retain]
+
+    mqtt_client = MQTTClient(clean_session=1, lwt=status_offline, keepalive=10)
     mqtt_client.start()
 
-    mqtt_client.publish(*online)
+    mqtt_client.publish(*status_online)
+    mqtt_client.subscribe([(status_topic, status_qos)])
 
     status.app_state = status.APP_IDLE
 

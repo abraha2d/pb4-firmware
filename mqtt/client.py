@@ -155,7 +155,7 @@ class MQTTClient:
         parts = [encode_int(packet_id)]
 
         if sub_type == TYPE_SUBSCRIBE:
-            parts.extend(encode_str(topic[0]) + encode_int(topic[1]) for topic in topics)
+            parts.extend(encode_str(topic[0]) + encode_int(topic[1], 1) for topic in topics)
             self.subscribes.append(packet_id)
         else:
             assert sub_type == TYPE_UNSUBSCRIBE
@@ -215,6 +215,8 @@ class MQTTClient:
                 self.publishes.remove(puback.packet_id)
             except ValueError:
                 # TODO: Handle "object not in sequence"
+                print(f"mqtt.recv_puback({header.type}): {puback.packet_id} not in {self.publishes}")
+                print(f"mqtt.recv_puback({header.type}): DEBUG {puback_data}")
                 pass
         else:
             assert header.type == TYPE_PUBREC or header.type == TYPE_PUBREL
@@ -230,11 +232,17 @@ class MQTTClient:
                 self.unsubscribes.remove(suback.packet_id)
         except ValueError:
             # TODO: Handle "object not in sequence"
+            print(f"mqtt.recv_suback({header.type}): {suback.packet_id} not in " +
+                  f"{self.subscribes if header.type == TYPE_SUBACK else self.unsubscribes}")
+            print(f"mqtt.recv_suback({header.type}): DEBUG {suback_data}")
             pass
 
         for i in range(suback.length - 2):
-            return_code = self.sock.recv(1)
+            return_code = int.from_bytes(self.sock.recv(1), "big")
             # TODO: Handle return code
+            if return_code > 2:
+                print(f"mqtt.recv_suback({header.type}): Return code {return_code} > 2")
+                print(f"mqtt.recv_suback({header.type}): DEBUG {suback_data}")
 
     def recv_pingresp(self, header):
         self.sock.recv(1)
@@ -271,6 +279,8 @@ class MQTTClient:
                     while self.should_run:
                         sleep_ms(1)
                         self.process()
+                except KeyError:
+                    continue
                 except OSError as e:
                     if e.errno == ECONNRESET:
                         continue
@@ -302,6 +312,7 @@ class MQTTClient:
         try:
             self.RECV_HELPER[header.type](self, header)
         except KeyError:
-            # TODO: Handle unknown header type
-            print(f"mqtt.process: Unknown header type.")
-            pass
+            print()
+            print(f"mqtt.process: Unknown header type {header.type}")
+            print(f"mqtt.process: DEBUG {header_data}")
+            raise
