@@ -47,7 +47,11 @@ class HTTPServer:
                             continue
                         raise
 
-                    start_new_thread(self.process, (conn,))
+                    try:
+                        start_new_thread(self.process, (conn,))
+                    except OSError:
+                        print("http.run: could not start new thread!")
+                        conn.close()
             finally:
                 sock.close()
 

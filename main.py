@@ -4,12 +4,11 @@ from utime import sleep_ms, time
 
 from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
-
 from mqtt.client import MQTTClient
 
-from config import erase_wlan_config, get_wlan_config
+from config import erase_wlan_config, get_wlan_config, MQTT_LWT_TOPIC
 from upy_platform import boot, status, wlan_ap, wlan_sta
-from utils import get_device_name, get_device_mac
+from utils import get_device_name
 from views import urlconf
 
 
@@ -49,7 +48,7 @@ def do_connect():
         do_setup()
     else:
         wlan_ssid, wlan_pass = wlan_config
-        print(f"main.do_connect: Connecting to {wlan_ssid}/{wlan_pass} ...")
+        print(f"main.do_connect: Connecting to {wlan_ssid} / {wlan_pass} ...")
 
         wlan_sta.config(dhcp_hostname=get_device_name())
         wlan_sta.connect(wlan_ssid, wlan_pass)
@@ -92,7 +91,7 @@ def main():
 
     do_connect()
 
-    status_topic = f"/pb4/devices/{get_device_mac()}/status"
+    status_topic = MQTT_LWT_TOPIC
     status_qos = 1
     status_retain = True
 

@@ -1,4 +1,9 @@
 from upy_platform import nvs
+from utils import get_device_mac
+
+
+MQTT_DEVICE_BASE = f"/pb4/devices/{get_device_mac()}"
+MQTT_LWT_TOPIC = f"{MQTT_DEVICE_BASE}/status"
 
 
 def get_wlan_config():
