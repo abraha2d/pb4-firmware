@@ -1,4 +1,5 @@
 src/captive_portal/www/*
+staging/*
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,linux,python,windows,pycharm
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,linux,python,windows,pycharm

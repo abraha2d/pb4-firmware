@@ -20,7 +20,9 @@
     "web-vitals": "^1.0.1"
   },
   "scripts": {
-    "analyze": "dotenv -- bash -c 'source-map-explorer $BUILD_PATH/static/js/*.js'",
+    "analyze": "source-map-explorer $(yarn --silent build_path)/static/js/*.js",
+    "appver": "find src -type f -print0 | LC_COLLATE=C sort -z | xargs -0 sha1sum | sha1sum | cut -c1-7",
+    "build_path": "dotenv -- bash -c 'echo $BUILD_PATH'",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
