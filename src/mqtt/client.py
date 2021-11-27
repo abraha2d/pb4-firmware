@@ -46,7 +46,7 @@ class MQTTClient:
             self,
             server="pb4_control.local",
             client_id=get_device_mac(),
-            clean_session=False,
+            clean_session=None,
             lwt=None,
             username=None,
             password=None,
@@ -59,6 +59,8 @@ class MQTTClient:
         self.username = username
         self.password = password
         self.keepalive = keepalive
+
+        self.callbacks = {}
 
         self.sock = None
         self.connected = False
@@ -84,7 +86,7 @@ class MQTTClient:
         header.type = TYPE_CONNECT
 
         flags, flags_data = new_struct(MQTTConnectFlagsLayout)
-        flags.clean_session = self.clean_session
+        flags.clean_session = True if self.clean_session is None else self.clean_session
 
         parts = [
             PROTOCOL,
@@ -167,10 +169,12 @@ class MQTTClient:
         self.sock.send(header_data + data_len + data)
         self.last_activity = time()
 
-    def subscribe(self, topics):
+    def subscribe(self, *topics):
+        for topic, qos, cb in topics:
+            self.callbacks[topic] = cb
         self.send_subscribe(topics, TYPE_SUBSCRIBE)
 
-    def unsubscribe(self, topics):
+    def unsubscribe(self, *topics):
         self.send_subscribe(topics, TYPE_UNSUBSCRIBE)
 
     def send_pingreq(self):
@@ -192,7 +196,12 @@ class MQTTClient:
         connack, connack_data = recv_struct(self.sock, MQTTConnAckLayout)
         # TODO: Handle unexpected session present
         # TODO: Handle return code != 0
-        self.connected = True
+        if self.clean_session is None:
+            self.send_disconnect()
+            self.clean_session = False
+            self.connect()
+        else:
+            self.connected = True
 
     def recv_publish(self, header):
         assert header.type == TYPE_PUBLISH
@@ -205,8 +214,14 @@ class MQTTClient:
             packet_id, data = decode_int(data)
             self.send_puback(packet_id, TYPE_PUBREC if header.qos == 2 else TYPE_PUBACK)
 
-        print(f"{topic} = {data} (qos={header.qos}, retain={header.retain})")
-        return topic, data, header.qos, header.retain == 1
+        try:
+            cb = self.callbacks.get(topic.decode(), self.default_callback)
+        except UnicodeError:
+            print(f"mqtt.recv_publish: UnicodeError")
+            print(f"mqtt.recv_publish: DEBUG {topic}")
+            cb = self.default_callback
+        cb(self, topic.decode(), data, header.qos, header.retain == 1)
+
 
     def recv_puback(self, header):
         puback, puback_data = recv_struct(self.sock, MQTTAckRecvLayout)
@@ -248,6 +263,9 @@ class MQTTClient:
         self.sock.recv(1)
         assert header.type == TYPE_PINGRESP
         self.pings -= 1
+
+    def default_callback(self, client, topic, data, qos, retain):
+        print(f"{topic} = {data} (qos={qos}, retain={retain})")
 
     RECV_HELPER = {
         TYPE_CONNACK: recv_connack,

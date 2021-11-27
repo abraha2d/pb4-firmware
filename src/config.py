@@ -3,7 +3,17 @@ from utils import get_device_mac
 
 
 MQTT_DEVICE_BASE = f"/pb4/devices/{get_device_mac()}"
-MQTT_LWT_TOPIC = f"{MQTT_DEVICE_BASE}/status"
+
+MQTT_TOPIC_STATUS = f"{MQTT_DEVICE_BASE}/status"
+MQTT_TOPIC_VERSION = f"{MQTT_DEVICE_BASE}/version"
+
+MQTT_TOPIC_OTA_FW_DATA = f"{MQTT_DEVICE_BASE}/ota/fw/data"
+MQTT_TOPIC_OTA_FW_HASH = f"{MQTT_DEVICE_BASE}/ota/fw/sha256"
+MQTT_TOPIC_OTA_FW_OK = f"{MQTT_DEVICE_BASE}/ota/fw/ok"
+
+MQTT_TOPIC_OTA_APP_DATA = f"{MQTT_DEVICE_BASE}/ota/app/data"
+MQTT_TOPIC_OTA_APP_HASH = f"{MQTT_DEVICE_BASE}/ota/app/sha256"
+MQTT_TOPIC_OTA_APP_OK = f"{MQTT_DEVICE_BASE}/ota/app/ok"
 
 
 def get_wlan_config():

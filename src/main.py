@@ -1,3 +1,6 @@
+from hashlib import sha256
+from os import uname
+
 import micropython; micropython.alloc_emergency_exception_buf(100)
 from machine import reset
 from utime import sleep_ms, time
@@ -6,7 +9,16 @@ from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
 from mqtt.client import MQTTClient
 
-from config import erase_wlan_config, get_wlan_config, MQTT_LWT_TOPIC
+from config import (
+    MQTT_TOPIC_STATUS,
+    MQTT_TOPIC_VERSION,
+    MQTT_TOPIC_OTA_FW_DATA,
+    MQTT_TOPIC_OTA_FW_HASH,
+    MQTT_TOPIC_OTA_APP_DATA,
+    MQTT_TOPIC_OTA_APP_HASH,
+    erase_wlan_config,
+    get_wlan_config, MQTT_TOPIC_OTA_FW_OK, MQTT_TOPIC_OTA_APP_OK,
+)
 from upy_platform import boot, status, wlan_ap, wlan_sta
 from utils import get_device_name
 from views import urlconf
@@ -71,8 +83,61 @@ def do_reset():
     erase_wlan_config()
 
 
-mqtt_client = None
+FW_DATA = bytearray()
+APP_DATA = bytearray()
 
+
+def recv_ota_fw_data(client, topic, data, qos, retain):
+    assert topic == MQTT_TOPIC_OTA_FW_DATA
+    FW_DATA.extend(data)
+    print(f"main.recv_ota_fw_data: Received {len(data)} bytes ({len(FW_DATA)} bytes total).")
+    status.app_state = status.APP_RUNNING
+
+
+def recv_ota_fw_hash(client, topic, data, qos, retain):
+    assert topic == MQTT_TOPIC_OTA_FW_HASH
+
+    global FW_DATA
+    fw_hash = sha256(FW_DATA).digest()
+
+    if fw_hash == data:
+        print(f"main.recv_ota_fw_hash: Hash valid. OTA update not implemented.")
+        client.publish(MQTT_TOPIC_OTA_FW_OK, "1", 1)
+        status.app_state = status.APP_IDLE
+    else:
+        print(f"main.recv_ota_fw_hash: Hash invalid! " +
+              f"actual (SHA256:{fw_hash.decode()}) != expected (SHA256:{data.decode()})")
+        client.publish(MQTT_TOPIC_OTA_FW_OK, "0", 1)
+        FW_DATA = bytearray()
+        status.app_state = status.APP_IDLE
+
+
+def recv_ota_app_data(client, topic, data, qos, retain):
+    assert topic == MQTT_TOPIC_OTA_APP_DATA
+    APP_DATA.extend(data)
+    print(f"main.recv_ota_app_data: Received {len(data)} bytes ({len(APP_DATA)} bytes total).")
+    status.app_state = status.APP_RUNNING
+
+
+def recv_ota_app_hash(client, topic, data, qos, retain):
+    assert topic == MQTT_TOPIC_OTA_APP_HASH
+
+    global APP_DATA
+    app_hash = sha256(APP_DATA).digest()
+
+    if app_hash == data:
+        print(f"main.recv_ota_app_hash: Hash valid. OTA update not implemented.")
+        client.publish(MQTT_TOPIC_OTA_APP_OK, "1", 1)
+        status.app_state = status.APP_IDLE
+    else:
+        print(f"main.recv_ota_app_hash: Hash invalid! " +
+              f"actual ({app_hash}) != expected ({data})")
+        client.publish(MQTT_TOPIC_OTA_APP_OK, "0", 1)
+        APP_DATA = bytearray()
+        status.app_state = status.APP_ERROR
+
+
+mqtt_client = None
 
 def main():
     global mqtt_client
@@ -91,18 +156,21 @@ def main():
 
     do_connect()
 
-    status_topic = MQTT_LWT_TOPIC
-    status_qos = 1
-    status_retain = True
+    status_offline = [MQTT_TOPIC_STATUS, "0", 1, True]
+    status_online = [MQTT_TOPIC_STATUS, "1", 1, True]
 
-    status_offline = [status_topic, "0", status_qos, status_retain]
-    status_online = [status_topic, "1", status_qos, status_retain]
-
-    mqtt_client = MQTTClient(clean_session=1, lwt=status_offline, keepalive=10)
+    mqtt_client = MQTTClient(lwt=status_offline, keepalive=10)
     mqtt_client.start()
 
     mqtt_client.publish(*status_online)
-    mqtt_client.subscribe([(status_topic, status_qos)])
+    mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
+
+    mqtt_client.subscribe(
+        (MQTT_TOPIC_OTA_FW_DATA, 2, recv_ota_fw_data),
+        (MQTT_TOPIC_OTA_FW_HASH, 2, recv_ota_fw_hash),
+        (MQTT_TOPIC_OTA_APP_DATA, 2, recv_ota_app_data),
+        (MQTT_TOPIC_OTA_APP_HASH, 2, recv_ota_app_hash),
+    )
 
     status.app_state = status.APP_IDLE
 
