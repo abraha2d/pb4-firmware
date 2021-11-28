@@ -1,10 +1,11 @@
 from _thread import allocate_lock, start_new_thread
+from binascii import hexlify
 from errno import EAGAIN, ECONNRESET
 from socket import getaddrinfo, socket, AF_INET, SOCK_STREAM
 
 from utime import sleep_ms, time
 
-from utils import get_device_mac
+from typing import Optional, Tuple, List, Union
 from .constants import (
     PROTOCOL,
     TYPE_CONNECT,
@@ -28,6 +29,9 @@ from .types import (
     MQTTConnAckLayout,
     MQTTAckRecvLayout,
     MQTTAckSendLayout,
+    PubAckWaitListType,
+    SubAckWaitListType,
+    UnSubAckWaitListType, InboundWaitListType,
 )
 from .utils import (
     new_struct,
@@ -44,36 +48,46 @@ from .utils import (
 class MQTTClient:
     def __init__(
             self,
-            server="pb4_control.local",
-            client_id=get_device_mac(),
-            clean_session=None,
-            lwt=None,
-            username=None,
-            password=None,
+            server: str,
+            client_id: str,
+            lwt: Tuple[str, str, int, bool] = None,
+            username: Optional[str] = None,
+            password: Optional[str] = None,
             keepalive=0,
+            start=True,
     ):
         self.server = server
         self.client_id = client_id
-        self.clean_session = clean_session
+        self.clean_session = True
         self.lwt = lwt
         self.username = username
         self.password = password
         self.keepalive = keepalive
 
-        self.callbacks = {}
+        self.sock: Optional[socket] = None
+        self.sock_lock = allocate_lock()
 
-        self.sock = None
         self.connected = False
         self.last_activity = time()
         self.packet_id = 0
-        self.pings = 0
+        self.retry_interval = 500
 
-        self.publishes = []
-        self.subscribes = []
-        self.unsubscribes = []
+        self.puback_wait: PubAckWaitListType = []
+        self.pubrec_wait: PubAckWaitListType = []
+        self.pubcomp_wait: PubAckWaitListType = []
+        self.suback_wait: SubAckWaitListType = []
+        self.unsuback_wait: UnSubAckWaitListType = []
+
+        self.inbound_wait: InboundWaitListType = []
+        self.ping_wait = 0
+
+        self.callbacks = {}
 
         self.run_lock = allocate_lock()
         self.should_run = False
+
+        if start:
+            self.start()
 
     def get_packet_id(self):
         self.packet_id += 1
@@ -81,12 +95,27 @@ class MQTTClient:
             self.packet_id = 1
         return self.packet_id
 
+    def get_sock(self):
+        if self.sock is None:
+            self.connected = False
+            address = getaddrinfo(self.server, 1883)[0][-1]
+            self.sock = socket(AF_INET, SOCK_STREAM)
+            self.sock.connect(address)
+            self.sock.setblocking(False)
+        return self.sock
+
+    def wait_retry(self):
+        print(f"mqtt.wait_retry: Retrying after {self.retry_interval} ms...")
+        sleep_ms(self.retry_interval)
+        if self.retry_interval < 4000:
+            self.retry_interval *= 2
+
     def connect(self):
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_CONNECT
 
         flags, flags_data = new_struct(MQTTConnectFlagsLayout)
-        flags.clean_session = True if self.clean_session is None else self.clean_session
+        flags.clean_session = self.clean_session
 
         parts = [
             PROTOCOL,
@@ -111,11 +140,11 @@ class MQTTClient:
 
         data = b"".join(parts)
         data_len = encode_varlen_int(len(data))
-        self.sock.send(header_data + data_len + data)
+        with self.sock_lock:
+            self.get_sock().send(header_data + data_len + data)
         self.last_activity = time()
-        self.connected = False
 
-    def publish(self, topic, message, qos=0, retain=False):
+    def publish(self, topic: str, message: str, qos=0, retain=False):
         while not self.connected:
             sleep_ms(1)
 
@@ -128,11 +157,13 @@ class MQTTClient:
         if qos > 0:
             packet_id = self.get_packet_id()
             data += encode_int(packet_id)
-            self.publishes.append(packet_id)
+            pub_wait = self.puback_wait if qos == 1 else self.pubrec_wait
+            pub_wait.append((packet_id, time(), topic, message, qos, retain))
         data += message
 
         data_len = encode_varlen_int(len(data))
-        self.sock.send(header_data + data_len + data)
+        with self.sock_lock:
+            self.get_sock().send(header_data + data_len + data)
         self.last_activity = time()
 
     def send_puback(self, packet_id, ack_type):
@@ -142,10 +173,29 @@ class MQTTClient:
             puback.header.qos = 1
         puback.length = 2
         puback.packet_id = packet_id
-        self.sock.send(puback_data)
+        with self.sock_lock:
+            self.get_sock().send(puback_data)
         self.last_activity = time()
 
-    def send_subscribe(self, topics, sub_type):
+        if ack_type == TYPE_PUBACK or ack_type == TYPE_PUBCOMP:
+            try:
+                packet_idx = [i[0] for i in self.inbound_wait].index(packet_id)
+            except ValueError:
+                print(f"mqtt.send_puback: WARNING just acked an unknown packet!")
+                return
+
+            packet_id, packet_time, topic, data, retained = self.inbound_wait.pop(packet_idx)
+
+            try:
+                topic = topic.decode()
+            except UnicodeError:
+                print(f"mqtt.send_puback: UnicodeError when trying to decode topic")
+                print(f"mqtt.send_puback: DEBUG {topic}")
+
+            cb = self.callbacks.get(topic, self.default_callback)
+            cb(self, topic, data, retained)
+
+    def send_subscribe(self, topics: Union[List[str, int], List[str]], sub_type):
         while not self.connected:
             sleep_ms(1)
 
@@ -158,15 +208,16 @@ class MQTTClient:
 
         if sub_type == TYPE_SUBSCRIBE:
             parts.extend(encode_str(topic[0]) + encode_int(topic[1], 1) for topic in topics)
-            self.subscribes.append(packet_id)
+            self.suback_wait.append((packet_id, time(), topics))
         else:
             assert sub_type == TYPE_UNSUBSCRIBE
             parts.extend(map(encode_str, topics))
-            self.unsubscribes.append(packet_id)
+            self.unsuback_wait.append((packet_id, time(), topics))
 
         data = b"".join(parts)
         data_len = encode_varlen_int(len(data))
-        self.sock.send(header_data + data_len + data)
+        with self.sock_lock:
+            self.get_sock().send(header_data + data_len + data)
         self.last_activity = time()
 
     def subscribe(self, *topics):
@@ -180,24 +231,49 @@ class MQTTClient:
     def send_pingreq(self):
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_PINGREQ
-        self.sock.send(header_data + b"\x00")
+        with self.sock_lock:
+            self.get_sock().send(header_data + b"\x00")
         self.last_activity = time()
-        self.pings += 1
+        self.ping_wait += 1
 
-    def send_disconnect(self):
+    def disconnect(self):
         self.connected = False
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_DISCONNECT
-        self.sock.send(header_data + b"\x00")
+        with self.sock_lock:
+            try:
+                self.get_sock().send(header_data + b"\x00")
+                self.get_sock().close()
+            except OSError:
+                pass
+            self.sock = None
         self.last_activity = time()
 
     def recv_connack(self, header):
         assert header.type == TYPE_CONNACK
-        connack, connack_data = recv_struct(self.sock, MQTTConnAckLayout)
-        # TODO: Handle unexpected session present
-        # TODO: Handle return code != 0
-        if self.clean_session is None:
-            self.send_disconnect()
+        connack, connack_data = recv_struct(self.get_sock(), MQTTConnAckLayout)
+
+        if connack_data.return_code != 0:
+            if connack_data.return_code == 1:
+                print("mqtt.recv_connack: ERROR unacceptable protocol version!")
+            elif connack_data.return_code == 2:
+                print("mqtt.recv_connack: ERROR identifier rejected")
+            elif connack_data.return_code == 3:
+                print("mqtt.recv_connack: ERROR Server unavailable")
+            elif connack_data.return_code == 4:
+                print("mqtt.recv_connack: ERROR bad user name or password")
+            elif connack_data.return_code == 5:
+                print("mqtt.recv_connack: ERROR not authorized")
+            else:
+                print("mqtt.recv_connack: ERROR unknown return code")
+            self.wait_retry()
+            self.connect()
+            return
+
+        if self.clean_session:
+            if connack_data.session_present == 0:
+                print("mqtt.recv_connack: WARNING unexpected session present")
+            self.disconnect()
             self.clean_session = False
             self.connect()
         else:
@@ -205,67 +281,63 @@ class MQTTClient:
 
     def recv_publish(self, header):
         assert header.type == TYPE_PUBLISH
-        data_len = recv_varlen_int(self.sock)
-        data = self.sock.recv(data_len)
+        data_len = recv_varlen_int(self.get_sock())
+        data = self.get_sock().recv(data_len)
 
         topic, data = decode_str(data)
 
         if header.qos != 0:
             packet_id, data = decode_int(data)
-            self.send_puback(packet_id, TYPE_PUBREC if header.qos == 2 else TYPE_PUBACK)
-
-        try:
-            cb = self.callbacks.get(topic.decode(), self.default_callback)
-        except UnicodeError:
-            print(f"mqtt.recv_publish: UnicodeError")
-            print(f"mqtt.recv_publish: DEBUG {topic}")
-            cb = self.default_callback
-        cb(self, topic.decode(), data, header.qos, header.retain == 1)
-
+            self.inbound_wait.append((packet_id, time(), topic, data, header.retain == 1))
+            self.send_puback(packet_id, TYPE_PUBACK if header.qos == 1 else TYPE_PUBREC)
 
     def recv_puback(self, header):
-        puback, puback_data = recv_struct(self.sock, MQTTAckRecvLayout)
-        if header.type == TYPE_PUBACK or header.type == TYPE_PUBCOMP:
-            try:
-                self.publishes.remove(puback.packet_id)
-            except ValueError:
-                # TODO: Handle "object not in sequence"
-                print(f"mqtt.recv_puback({header.type}): {puback.packet_id} not in {self.publishes}")
-                print(f"mqtt.recv_puback({header.type}): DEBUG {puback_data}")
-                pass
+        puback, puback_data = recv_struct(self.get_sock(), MQTTAckRecvLayout)
+        if header.type == TYPE_PUBREL:
+            self.send_puback(puback.packet_id, TYPE_PUBCOMP)
         else:
-            assert header.type == TYPE_PUBREC or header.type == TYPE_PUBREL
-            self.send_puback(puback.packet_id, header.type + 1)
+            outbound_wait = (
+                self.puback_wait if header.type == TYPE_PUBACK else
+                self.pubrec_wait if header.type == TYPE_PUBREC else
+                self.pubcomp_wait)
+
+            try:
+                packet_idx = [i[0] for i in outbound_wait].index(puback.packet_id)
+            except ValueError:
+                print(f"mqtt.recv_puback({header.type}): {puback.packet_id} not in {outbound_wait}")
+                print(f"mqtt.recv_puback({header.type}): DEBUG {hexlify(puback_data)}")
+                return
+
+            packet_info = outbound_wait.pop(packet_idx)
+
+            if header.type == TYPE_PUBREC:
+                self.send_puback(puback.packet_id, TYPE_PUBREL)
+                self.pubcomp_wait.append(packet_info)
 
     def recv_suback(self, header):
-        suback, suback_data = recv_struct(self.sock, MQTTAckRecvLayout)
+        suback, suback_data = recv_struct(self.get_sock(), MQTTAckRecvLayout)
+        suback_wait = self.suback_wait if header.type == TYPE_SUBACK else self.unsuback_wait
         try:
-            if header.type == TYPE_SUBACK:
-                self.subscribes.remove(suback.packet_id)
-            else:
-                assert header.type == TYPE_UNSUBACK
-                self.unsubscribes.remove(suback.packet_id)
+            suback_wait.pop([i[0] for i in suback_wait].index(suback.packet_id))
         except ValueError:
-            # TODO: Handle "object not in sequence"
-            print(f"mqtt.recv_suback({header.type}): {suback.packet_id} not in " +
-                  f"{self.subscribes if header.type == TYPE_SUBACK else self.unsubscribes}")
-            print(f"mqtt.recv_suback({header.type}): DEBUG {suback_data}")
+            print(f"mqtt.recv_suback({header.type}): {suback.packet_id} not in {suback_wait}")
+            print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data)}")
             pass
 
         for i in range(suback.length - 2):
-            return_code = int.from_bytes(self.sock.recv(1), "big")
-            # TODO: Handle return code
+            return_code = int.from_bytes(self.get_sock().recv(1), "big")
             if return_code > 2:
                 print(f"mqtt.recv_suback({header.type}): Return code {return_code} > 2")
-                print(f"mqtt.recv_suback({header.type}): DEBUG {suback_data}")
+                print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data)}")
 
     def recv_pingresp(self, header):
-        self.sock.recv(1)
         assert header.type == TYPE_PINGRESP
-        self.pings -= 1
+        self.get_sock().recv(1)
+        self.ping_wait = 0
 
-    def default_callback(self, client, topic, data, qos, retain):
-        print(f"{topic} = {data} (qos={qos}, retain={retain})")
+    @staticmethod
+    def default_callback(client, topic, data, retained):
+        print(f"{topic} = {data} (retained={retained})")
 
     RECV_HELPER = {
         TYPE_CONNACK: recv_connack,
@@ -287,29 +359,19 @@ class MQTTClient:
         with self.run_lock:
             while self.should_run:
                 try:
-                    sockaddr = getaddrinfo(self.server, 1883)[0][-1]
-                    self.sock = socket(AF_INET, SOCK_STREAM)
-                    self.sock.connect(sockaddr)
-
                     self.connect()
-
-                    self.sock.setblocking(False)
                     while self.should_run:
                         sleep_ms(1)
                         self.process()
                 except KeyError:
+                    # Caught and released in process()
                     continue
                 except OSError as e:
                     if e.errno == ECONNRESET:
                         continue
                     raise
                 finally:
-                    try:
-                        self.send_disconnect()
-                    except OSError:
-                        pass
-                    self.sock.close()
-                    self.sock = None
+                    self.disconnect()
 
     def stop(self):
         self.should_run = False
@@ -317,7 +379,7 @@ class MQTTClient:
             pass
 
     def process(self):
-        if time() - self.last_activity > self.keepalive:
+        if self.connected and time() - self.last_activity > self.keepalive:
             self.send_pingreq()
 
         try:
@@ -332,5 +394,5 @@ class MQTTClient:
         except KeyError:
             print()
             print(f"mqtt.process: Unknown header type {header.type}")
-            print(f"mqtt.process: DEBUG {header_data}")
+            print(f"mqtt.process: DEBUG {hexlify(header_data)}")
             raise

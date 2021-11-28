@@ -10,11 +10,14 @@ from .utils import get_qname_end, get_answer
 
 
 class DNSServer:
-    def __init__(self, ip_addr, bind_addr=getaddrinfo("0.0.0.0", 53, AF_INET, SOCK_DGRAM)[0][-1]):
+    def __init__(self, ip_addr, bind_addr=getaddrinfo("0.0.0.0", 53, AF_INET, SOCK_DGRAM)[0][-1], start=True):
         self.answer = get_answer(ip_addr)
         self.bind_addr = bind_addr
         self.run_lock = allocate_lock()
         self.should_run = False
+
+        if start:
+            self.start()
 
     def start(self):
         self.should_run = True

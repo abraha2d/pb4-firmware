@@ -14,13 +14,16 @@ from .views import file_view
 
 
 class HTTPServer:
-    def __init__(self, ip_addr, urlconf, bind_addr=getaddrinfo("0.0.0.0", 80, AF_INET, SOCK_STREAM)[0][-1]):
+    def __init__(self, ip_addr, urlconf, bind_addr=getaddrinfo("0.0.0.0", 80, AF_INET, SOCK_STREAM)[0][-1], start=True):
         self.ip_addr = ip_addr
         self.urlconf = urlconf
         self.bind_addr = bind_addr
         self.run_lock = allocate_lock()
         self.should_run = False
         self.num_threads = 0
+
+        if start:
+            self.start()
 
     def start(self):
         self.should_run = True

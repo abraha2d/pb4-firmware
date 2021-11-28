@@ -1,9 +1,9 @@
 from _thread import allocate_lock, start_new_thread
-from time import sleep_ms
 
 from esp32 import NVS
 from machine import I2C, Pin, PWM, Signal, TouchPad
 from network import AP_IF, STA_IF, WLAN
+from utime import sleep_ms
 
 boot = Signal(0, Pin.IN, invert=True)
 
@@ -52,7 +52,7 @@ class StatusLED:
     NETWORK_CONNECTED = BLUE, False
     NETWORK_HOTSPOT = WHITE, False
 
-    def __init__(self):
+    def __init__(self, start=True):
         self.r = PWM(Pin(27), freq=40000, duty=1023)
         self.g = PWM(Pin(14), freq=40000, duty=1023)
         self.b = PWM(Pin(12), freq=40000, duty=1023)
@@ -60,8 +60,14 @@ class StatusLED:
         self.network_state = None
         self.app_state = None
 
+        self.network_lock = allocate_lock()
+        self.app_lock = allocate_lock()
+
         self.run_lock = allocate_lock()
         self.should_run = False
+
+        if start:
+            self.start()
 
     def write(self, color):
         r, g, b = color
@@ -88,9 +94,11 @@ class StatusLED:
         with self.run_lock:
             while self.should_run:
                 if self.network_state is not None:
-                    self.show(*self.network_state)
+                    with self.network_lock:
+                        self.show(*self.network_state)
                 if self.app_state is not None:
-                    self.show(*self.app_state)
+                    with self.app_lock:
+                        self.show(*self.app_state)
                 if self.network_state is None and self.app_state is None:
                     self.write(self.BLACK)
 
@@ -99,6 +107,17 @@ class StatusLED:
         while self.run_lock.locked():
             pass
 
+    def wait_for_app_display(self, wait_for_end=True):
+        while not self.app_lock.locked():
+            sleep_ms(1)
+        while wait_for_end and self.app_lock.locked():
+            sleep_ms(1)
+
+    def wait_for_network_display(self, wait_for_end=True):
+        while not self.network_lock.locked():
+            sleep_ms(1)
+        while wait_for_end and self.network_lock.locked():
+            sleep_ms(1)
+
 
 status = StatusLED()
-status.start()

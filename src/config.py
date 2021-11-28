@@ -2,6 +2,7 @@ from upy_platform import nvs
 from utils import get_device_mac
 
 
+MQTT_SERVER = "pb4_control.local"
 MQTT_DEVICE_BASE = f"/pb4/devices/{get_device_mac()}"
 
 MQTT_TOPIC_STATUS = f"{MQTT_DEVICE_BASE}/status"
@@ -26,7 +27,7 @@ def get_wlan_config():
         assert nvs.get_blob("wlan_pass", wlan_pass) == wlan_pass_len
         return wlan_ssid.decode(), wlan_pass.decode()
     except (OSError, AssertionError):
-        return False
+        return None
 
 
 def set_wlan_config(wlan_ssid, wlan_pass):

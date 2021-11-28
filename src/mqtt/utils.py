@@ -45,7 +45,9 @@ def recv_varlen_int(sock):
 
 
 def encode_str(s):
-    return encode_int(len(s)) + s.encode()
+    if type(s) == str:
+        s = s.encode()
+    return encode_int(len(s)) + s
 
 
 def decode_str(data):

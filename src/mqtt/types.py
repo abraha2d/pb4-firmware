@@ -1,5 +1,7 @@
 from uctypes import BF_LEN, BF_POS, BFUINT8, UINT8, UINT16
 
+from typing import List, Tuple
+
 MQTTHeaderLayout = {
     "type": 0 | BFUINT8 | 4 << BF_POS | 4 << BF_LEN,
     "dup": 0 | BFUINT8 | 3 << BF_POS | 1 << BF_LEN,
@@ -32,3 +34,8 @@ MQTTAckSendLayout = {
     "length": 1 | UINT8,
     "packet_id": 2 | UINT16,
 }
+
+PubAckWaitListType = List[Tuple[int, int, str, str, int, bool]]
+InboundWaitListType = List[Tuple[int, int, str, str, bool]]
+SubAckWaitListType = List[Tuple[int, int, List[Tuple[str, int]]]]
+UnSubAckWaitListType = List[Tuple[int, int, List[str]]]

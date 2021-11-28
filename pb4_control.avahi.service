@@ -1,0 +1,9 @@
+[Unit]
+Requires=avahi-daemon.service
+
+[Service]
+Type=exec
+ExecStart=avahi-publish -aR pb4_control.local 192.168.75.22
+
+[Install]
+WantedBy=multi-user.target

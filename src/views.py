@@ -1,11 +1,10 @@
 from binascii import hexlify
 from json import dumps
-from time import time
 
 from captive_portal.http.views import file_view
 from config import set_wlan_config
 from upy_platform import wlan_sta, status
-from utils import get_device_name
+from utils import connect_wlan
 
 
 def connect(path, query_dict, headers):
@@ -15,15 +14,7 @@ def connect(path, query_dict, headers):
     ssid = query_dict["ssid"]
     password = query_dict.get("password")
 
-    print(f"views.connect: Connecting to {ssid}/{password} ...")
-    wlan_sta.config(dhcp_hostname=get_device_name())
-    wlan_sta.connect(ssid, password)
-
-    status.network_state = status.NETWORK_SCANNING
-
-    start_time = time()
-    while not wlan_sta.isconnected() and time() - start_time < 30:
-        pass
+    connect_wlan(ssid, password)
 
     if wlan_sta.isconnected():
         print(f"views.connect: Connected.")
