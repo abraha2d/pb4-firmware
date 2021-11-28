@@ -5,7 +5,6 @@ from socket import getaddrinfo, socket, AF_INET, SOCK_STREAM
 
 from utime import sleep_ms, time
 
-from typing import Optional, Tuple, List, Union
 from .constants import (
     PROTOCOL,
     TYPE_CONNECT,
@@ -29,9 +28,6 @@ from .types import (
     MQTTConnAckLayout,
     MQTTAckRecvLayout,
     MQTTAckSendLayout,
-    PubAckWaitListType,
-    SubAckWaitListType,
-    UnSubAckWaitListType, InboundWaitListType,
 )
 from .utils import (
     new_struct,
@@ -50,9 +46,9 @@ class MQTTClient:
             self,
             server: str,
             client_id: str,
-            lwt: Tuple[str, str, int, bool] = None,
-            username: Optional[str] = None,
-            password: Optional[str] = None,
+            lwt=None,
+            username=None,
+            password=None,
             keepalive=0,
             start=True,
     ):
@@ -64,7 +60,7 @@ class MQTTClient:
         self.password = password
         self.keepalive = keepalive
 
-        self.sock: Optional[socket] = None
+        self.sock = None
         self.sock_lock = allocate_lock()
 
         self.connected = False
@@ -72,13 +68,13 @@ class MQTTClient:
         self.packet_id = 0
         self.retry_interval = 500
 
-        self.puback_wait: PubAckWaitListType = []
-        self.pubrec_wait: PubAckWaitListType = []
-        self.pubcomp_wait: PubAckWaitListType = []
-        self.suback_wait: SubAckWaitListType = []
-        self.unsuback_wait: UnSubAckWaitListType = []
+        self.puback_wait = []
+        self.pubrec_wait = []
+        self.pubcomp_wait = []
+        self.suback_wait = []
+        self.unsuback_wait = []
 
-        self.inbound_wait: InboundWaitListType = []
+        self.inbound_wait = []
         self.ping_wait = 0
 
         self.callbacks = {}
@@ -195,7 +191,7 @@ class MQTTClient:
             cb = self.callbacks.get(topic, self.default_callback)
             cb(self, topic, data, retained)
 
-    def send_subscribe(self, topics: Union[List[str, int], List[str]], sub_type):
+    def send_subscribe(self, topics, sub_type):
         while not self.connected:
             sleep_ms(1)
 
@@ -253,16 +249,16 @@ class MQTTClient:
         assert header.type == TYPE_CONNACK
         connack, connack_data = recv_struct(self.get_sock(), MQTTConnAckLayout)
 
-        if connack_data.return_code != 0:
-            if connack_data.return_code == 1:
+        if connack.return_code != 0:
+            if connack.return_code == 1:
                 print("mqtt.recv_connack: ERROR unacceptable protocol version!")
-            elif connack_data.return_code == 2:
+            elif connack.return_code == 2:
                 print("mqtt.recv_connack: ERROR identifier rejected")
-            elif connack_data.return_code == 3:
+            elif connack.return_code == 3:
                 print("mqtt.recv_connack: ERROR Server unavailable")
-            elif connack_data.return_code == 4:
+            elif connack.return_code == 4:
                 print("mqtt.recv_connack: ERROR bad user name or password")
-            elif connack_data.return_code == 5:
+            elif connack.return_code == 5:
                 print("mqtt.recv_connack: ERROR not authorized")
             else:
                 print("mqtt.recv_connack: ERROR unknown return code")
@@ -271,7 +267,7 @@ class MQTTClient:
             return
 
         if self.clean_session:
-            if connack_data.session_present == 0:
+            if connack.session_present == 0:
                 print("mqtt.recv_connack: WARNING unexpected session present")
             self.disconnect()
             self.clean_session = False
