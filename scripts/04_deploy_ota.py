@@ -63,11 +63,11 @@ def main():
 
     print(f"Reading {APP_BIN}...", end="", flush=True)
     with open(APP_BIN, "rb") as payload_file:
-        payload = payload_file.read()
-        print(f" done. {len(payload)} bytes.")
+        MESSAGE_DATA = payload_file.read()
+        print(f" done. {len(MESSAGE_DATA)} bytes.")
 
         print("Hashing...", end="", flush=True)
-        MESSAGE_HASH = sha256(payload).digest()
+        MESSAGE_HASH = sha256(MESSAGE_DATA).digest()
         print(" done.")
         print(f"SHA256: {hexlify(MESSAGE_HASH).decode()}")
 

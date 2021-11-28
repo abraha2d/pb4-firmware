@@ -267,7 +267,7 @@ class MQTTClient:
             return
 
         if self.clean_session:
-            if connack.session_present == 0:
+            if connack.session_present == 1:
                 print("mqtt.recv_connack: WARNING unexpected session present")
             self.disconnect()
             self.clean_session = False
@@ -278,7 +278,14 @@ class MQTTClient:
     def recv_publish(self, header):
         assert header.type == TYPE_PUBLISH
         data_len = recv_varlen_int(self.get_sock())
-        data = self.get_sock().recv(data_len)
+        data = bytearray()
+        while len(data) != data_len:
+            try:
+                data.extend(self.get_sock().recv(data_len - len(data)))
+            except OSError as e:
+                if e.errno == EAGAIN:
+                    continue
+                raise
 
         topic, data = decode_str(data)
 
