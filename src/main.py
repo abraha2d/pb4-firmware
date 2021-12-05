@@ -1,5 +1,8 @@
+from errno import EPERM
 from os import uname
 
+# noinspection PyUnresolvedReferences
+from esp32 import Partition
 from machine import reset
 from uasyncio import create_task, get_event_loop, run, sleep_ms
 
@@ -94,6 +97,10 @@ async def main():
     await setup_ota_subscriptions(mqtt_client)
 
     status.app_state = status.APP_IDLE
+
+    # TODO: try to run as much initialization as possible before calling this
+    if Partition(Partition.RUNNING).info()[4] != "factory":
+        Partition.mark_app_valid_cancel_rollback()
 
     loop = get_event_loop()
     loop.run_forever()

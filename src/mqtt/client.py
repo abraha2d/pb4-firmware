@@ -1,4 +1,5 @@
 from binascii import hexlify
+from errno import ECONNRESET
 from gc import collect
 from socket import getaddrinfo
 from time import time
@@ -371,6 +372,12 @@ class MQTTClient:
             except EOFError:
                 print("mqtt.run: WARNING received truncated message")
                 continue
+            except OSError as e:
+                if e.errno == ECONNRESET:
+                    # This means we messed up on sending pings... probably because of a large message
+                    # TODO: figure out how to send pings even when in the middle of a large receive
+                    continue
+                raise
             finally:
                 await self.disconnect()
 
