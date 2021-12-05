@@ -1,4 +1,5 @@
 from io import StringIO
+# noinspection PyUnresolvedReferences
 from sys import print_exception
 from time import time_ns
 
@@ -18,19 +19,24 @@ class HTTPServer:
         await server.wait_closed()
 
     async def callback(self, reader, writer):
-        request = bytearray()
-        while True:
-            chunk = await reader.read(4096)
-            if len(chunk) == 0:
-                break
-            request.extend(chunk)
-            if b"\r\n\r\n" in request:
-                break
-        request = request.decode("ISO-8859-1")
-        request_lines = request.split("\r\n")
 
         try:
+            request = bytearray()
+            try:
+                while True:
+                    chunk = await reader.read(4096)
+                    if len(chunk) == 0:
+                        break
+                    request.extend(chunk)
+                    if b"\r\n\r\n" in request:
+                        break
+            finally:
+                request = request.decode("ISO-8859-1")
+                request_lines = request.split("\r\n")
+
             status, headers, data = await self.get_response(request_lines)
+        except MemoryError:
+            status, headers, data = 413, {}, f"413 Payload Too Large"
         except Exception as e:
             # get_response includes a try/except to catch view exceptions (status 500)
             # If it throws an exception, that means the request is malformed (status 400)
@@ -38,6 +44,7 @@ class HTTPServer:
             print_exception(e, sio)
             status, headers, data = 400, {}, f"400 Bad Request\r\n{sio.getvalue()}"
 
+        # noinspection PyUnboundLocalVariable
         print(f'[{time_ns() / 1000000000:14.3f}] "{request_lines[0]}" {status}')
 
         headers = "".join(f"{k}: {v}\r\n" for k, v in headers.items())

@@ -12,8 +12,8 @@ class DNSServer:
         self.answer = get_answer(ip_addr)
 
     async def serve(self):
-        ai = getaddrinfo('0.0.0.0', 53)[0]  # TODO this is blocking!
-        s = socket(AF_INET, SOCK_DGRAM)
+        ai = getaddrinfo('0.0.0.0', 53, AF_INET, SOCK_DGRAM)[0]  # TODO this is blocking!
+        s = socket(ai[0], ai[1], ai[2])
         s.setblocking(False)
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         s.bind(ai[-1])

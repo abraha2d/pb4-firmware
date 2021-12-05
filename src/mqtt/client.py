@@ -1,9 +1,9 @@
-from _thread import allocate_lock, start_new_thread
 from binascii import hexlify
-from errno import EAGAIN, ECONNRESET
-from socket import getaddrinfo, socket, AF_INET, SOCK_STREAM
+from gc import collect
+from socket import getaddrinfo
+from time import time
 
-from utime import sleep_ms, time
+from uasyncio import Event, Lock, TimeoutError, open_connection, sleep_ms, wait_for
 
 from .constants import (
     PROTOCOL,
@@ -50,7 +50,6 @@ class MQTTClient:
             username=None,
             password=None,
             keepalive=0,
-            start=True,
     ):
         self.server = server
         self.client_id = client_id
@@ -61,9 +60,9 @@ class MQTTClient:
         self.keepalive = keepalive
 
         self.sock = None
-        self.sock_lock = allocate_lock()
+        self.sock_lock = Lock()
 
-        self.connected = False
+        self.connected = Event()
         self.last_activity = time()
         self.packet_id = 0
         self.retry_interval = 500
@@ -79,34 +78,27 @@ class MQTTClient:
 
         self.callbacks = {}
 
-        self.run_lock = allocate_lock()
-        self.should_run = False
-
-        if start:
-            self.start()
-
     def get_packet_id(self):
         self.packet_id += 1
         if self.packet_id > 65536:
             self.packet_id = 1
         return self.packet_id
 
-    def get_sock(self):
+    async def get_sock(self):
         if self.sock is None:
-            self.connected = False
-            address = getaddrinfo(self.server, 1883)[0][-1]
-            self.sock = socket(AF_INET, SOCK_STREAM)
-            self.sock.connect(address)
-            self.sock.setblocking(False)
+            self.connected.clear()
+            # workaround for https://github.com/micropython/micropython/issues/8038
+            ai = getaddrinfo(self.server, 1883)[0][-1]  # TODO: remove once fixed upstream
+            self.sock = await open_connection(*ai)
         return self.sock
 
-    def wait_retry(self):
+    async def wait_retry(self):
         print(f"mqtt.wait_retry: Retrying after {self.retry_interval} ms...")
-        sleep_ms(self.retry_interval)
+        await sleep_ms(self.retry_interval)
         if self.retry_interval < 4000:
             self.retry_interval *= 2
 
-    def connect(self):
+    async def connect(self):
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_CONNECT
 
@@ -136,13 +128,14 @@ class MQTTClient:
 
         data = b"".join(parts)
         data_len = encode_varlen_int(len(data))
-        with self.sock_lock:
-            self.get_sock().send(header_data + data_len + data)
+        async with self.sock_lock:
+            reader, writer = await self.get_sock()
+            writer.write(header_data + data_len + data)
+            await writer.drain()
         self.last_activity = time()
 
-    def publish(self, topic: str, message: str, qos=0, retain=False):
-        while not self.connected:
-            sleep_ms(1)
+    async def publish(self, topic: str, message: str, qos=0, retain=False):
+        await self.connected.wait()
 
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_PUBLISH
@@ -158,19 +151,23 @@ class MQTTClient:
         data += message
 
         data_len = encode_varlen_int(len(data))
-        with self.sock_lock:
-            self.get_sock().send(header_data + data_len + data)
+        async with self.sock_lock:
+            reader, writer = await self.get_sock()
+            writer.write(header_data + data_len + data)
+            await writer.drain()
         self.last_activity = time()
 
-    def send_puback(self, packet_id, ack_type):
+    async def send_puback(self, packet_id, ack_type):
         puback, puback_data = new_struct(MQTTAckSendLayout)
         puback.header.type = ack_type
         if ack_type == TYPE_PUBREL:
             puback.header.qos = 1
         puback.length = 2
         puback.packet_id = packet_id
-        with self.sock_lock:
-            self.get_sock().send(puback_data)
+        async with self.sock_lock:
+            reader, writer = await self.get_sock()
+            writer.write(puback_data)
+            await writer.drain()
         self.last_activity = time()
 
         if ack_type == TYPE_PUBACK or ack_type == TYPE_PUBCOMP:
@@ -189,11 +186,10 @@ class MQTTClient:
                 print(f"mqtt.send_puback: DEBUG {topic}")
 
             cb = self.callbacks.get(topic, self.default_callback)
-            cb(self, topic, data, retained)
+            await cb(self, topic, data, retained)
 
-    def send_subscribe(self, topics, sub_type):
-        while not self.connected:
-            sleep_ms(1)
+    async def send_subscribe(self, topics, sub_type):
+        await self.connected.wait()
 
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = sub_type
@@ -212,42 +208,50 @@ class MQTTClient:
 
         data = b"".join(parts)
         data_len = encode_varlen_int(len(data))
-        with self.sock_lock:
-            self.get_sock().send(header_data + data_len + data)
+        async with self.sock_lock:
+            reader, writer = await self.get_sock()
+            writer.write(header_data + data_len + data)
+            await writer.drain()
         self.last_activity = time()
 
-    def subscribe(self, *topics):
+    async def subscribe(self, *topics):
         for topic, qos, cb in topics:
             self.callbacks[topic] = cb
-        self.send_subscribe(topics, TYPE_SUBSCRIBE)
+        await self.send_subscribe(topics, TYPE_SUBSCRIBE)
 
-    def unsubscribe(self, *topics):
-        self.send_subscribe(topics, TYPE_UNSUBSCRIBE)
+    async def unsubscribe(self, *topics):
+        await self.send_subscribe(topics, TYPE_UNSUBSCRIBE)
 
-    def send_pingreq(self):
+    async def send_pingreq(self):
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_PINGREQ
-        with self.sock_lock:
-            self.get_sock().send(header_data + b"\x00")
+        async with self.sock_lock:
+            reader, writer = await self.get_sock()
+            writer.write(header_data + b"\x00")
+            await writer.drain()
         self.last_activity = time()
         self.ping_wait += 1
 
-    def disconnect(self):
-        self.connected = False
+    async def disconnect(self):
+        self.connected.clear()
         header, header_data = new_struct(MQTTHeaderLayout)
         header.type = TYPE_DISCONNECT
-        with self.sock_lock:
+        async with self.sock_lock:
             try:
-                self.get_sock().send(header_data + b"\x00")
-                self.get_sock().close()
+                reader, writer = await self.get_sock()
+                writer.write(header_data + b"\x00")
+                await writer.drain()
+                writer.close()
+                await writer.wait_closed()
             except OSError:
                 pass
             self.sock = None
         self.last_activity = time()
 
-    def recv_connack(self, header):
+    async def recv_connack(self, header):
         assert header.type == TYPE_CONNACK
-        connack, connack_data = recv_struct(self.get_sock(), MQTTConnAckLayout)
+        reader, writer = await self.get_sock()
+        connack, connack_data = await recv_struct(reader, MQTTConnAckLayout)
 
         if connack.return_code != 0:
             if connack.return_code == 1:
@@ -262,84 +266,85 @@ class MQTTClient:
                 print("mqtt.recv_connack: ERROR not authorized")
             else:
                 print("mqtt.recv_connack: ERROR unknown return code")
-            self.wait_retry()
-            self.connect()
+            await self.wait_retry()
+            await self.connect()
             return
 
         if self.clean_session:
             if connack.session_present == 1:
                 print("mqtt.recv_connack: WARNING unexpected session present")
-            self.disconnect()
+            await self.disconnect()
             self.clean_session = False
-            self.connect()
+            await self.connect()
         else:
-            self.connected = True
+            self.connected.set()
 
-    def recv_publish(self, header):
+    async def recv_publish(self, header):
         assert header.type == TYPE_PUBLISH
-        data_len = recv_varlen_int(self.get_sock())
-        data = bytearray()
-        while len(data) != data_len:
-            try:
-                data.extend(self.get_sock().recv(data_len - len(data)))
-            except OSError as e:
-                if e.errno == EAGAIN:
-                    continue
-                raise
+        reader, writer = await self.get_sock()
+        data_len = await recv_varlen_int(reader)
+        collect()
+        print(f"mqtt.recv_publish: Attempting to receive {data_len} bytes...")
+        data = await reader.readexactly(data_len)
 
         topic, data = decode_str(data)
 
         if header.qos != 0:
             packet_id, data = decode_int(data)
             self.inbound_wait.append((packet_id, time(), topic, data, header.retain == 1))
-            self.send_puback(packet_id, TYPE_PUBACK if header.qos == 1 else TYPE_PUBREC)
+            await self.send_puback(packet_id, TYPE_PUBACK if header.qos == 1 else TYPE_PUBREC)
 
-    def recv_puback(self, header):
-        puback, puback_data = recv_struct(self.get_sock(), MQTTAckRecvLayout)
+    async def recv_puback(self, header):
+        reader, writer = await self.get_sock()
+        puback, puback_data = await recv_struct(reader, MQTTAckRecvLayout)
         if header.type == TYPE_PUBREL:
-            self.send_puback(puback.packet_id, TYPE_PUBCOMP)
+            await self.send_puback(puback.packet_id, TYPE_PUBCOMP)
         else:
             outbound_wait = (
                 self.puback_wait if header.type == TYPE_PUBACK else
                 self.pubrec_wait if header.type == TYPE_PUBREC else
-                self.pubcomp_wait)
+                self.pubcomp_wait
+            )
 
             try:
                 packet_idx = [i[0] for i in outbound_wait].index(puback.packet_id)
             except ValueError:
-                print(f"mqtt.recv_puback({header.type}): {puback.packet_id} not in {outbound_wait}")
+                print(f"mqtt.recv_puback({header.type}): WARNING {puback.packet_id} not in {outbound_wait}")
                 print(f"mqtt.recv_puback({header.type}): DEBUG {hexlify(puback_data)}")
                 return
 
             packet_info = outbound_wait.pop(packet_idx)
 
             if header.type == TYPE_PUBREC:
-                self.send_puback(puback.packet_id, TYPE_PUBREL)
+                await self.send_puback(puback.packet_id, TYPE_PUBREL)
                 self.pubcomp_wait.append(packet_info)
 
-    def recv_suback(self, header):
-        suback, suback_data = recv_struct(self.get_sock(), MQTTAckRecvLayout)
+    async def recv_suback(self, header):
+        reader, writer = await self.get_sock()
+        suback, suback_data = await recv_struct(reader, MQTTAckRecvLayout)
         suback_wait = self.suback_wait if header.type == TYPE_SUBACK else self.unsuback_wait
         try:
             suback_wait.pop([i[0] for i in suback_wait].index(suback.packet_id))
         except ValueError:
-            print(f"mqtt.recv_suback({header.type}): {suback.packet_id} not in {suback_wait}")
+            print(f"mqtt.recv_suback({header.type}): WARNING {suback.packet_id} not in {suback_wait}")
             print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data)}")
-            pass
 
         for i in range(suback.length - 2):
-            return_code = int.from_bytes(self.get_sock().recv(1), "big")
+            byte = await reader.readexactly(1)
+            return_code = int.from_bytes(byte, "big")
             if return_code > 2:
-                print(f"mqtt.recv_suback({header.type}): Return code {return_code} > 2")
+                print(f"mqtt.recv_suback({header.type}): WARNING return code {return_code} > 2")
                 print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data)}")
 
-    def recv_pingresp(self, header):
+    async def recv_pingresp(self, header):
         assert header.type == TYPE_PINGRESP
-        self.get_sock().recv(1)
+        reader, writer = await self.get_sock()
+        await reader.readexactly(1)
         self.ping_wait = 0
 
+    # noinspection PyUnusedLocal
     @staticmethod
-    def default_callback(client, topic, data, retained):
+    async def default_callback(client, topic, data, retained):
         print(f"{topic} = {data} (retained={retained})")
 
     RECV_HELPER = {
@@ -354,48 +359,37 @@ class MQTTClient:
         TYPE_PINGRESP: recv_pingresp,
     }
 
-    def start(self):
-        self.should_run = True
-        start_new_thread(self.run, ())
+    async def run(self):
+        while True:
+            try:
+                await self.connect()
+                while True:
+                    await self.process_one()
+            except KeyError:
+                # Caught and released in process_one()
+                continue
+            except EOFError:
+                print("mqtt.run: WARNING received truncated message")
+                continue
+            finally:
+                await self.disconnect()
 
-    def run(self):
-        with self.run_lock:
-            while self.should_run:
-                try:
-                    self.connect()
-                    while self.should_run:
-                        sleep_ms(1)
-                        self.process()
-                except KeyError:
-                    # Caught and released in process()
-                    continue
-                except OSError as e:
-                    if e.errno == ECONNRESET:
-                        continue
-                    raise
-                finally:
-                    self.disconnect()
+    async def process_one(self):
+        if self.connected.is_set() and time() - self.last_activity > self.keepalive:
+            await self.send_pingreq()
 
-    def stop(self):
-        self.should_run = False
-        while self.run_lock.locked():
-            pass
-
-    def process(self):
-        if self.connected and time() - self.last_activity > self.keepalive:
-            self.send_pingreq()
+        max_wait = self.keepalive - (time() - self.last_activity)
 
         try:
-            header, header_data = recv_struct(self.sock, MQTTHeaderLayout)
-        except OSError as e:
-            if e.errno == EAGAIN:
-                return
-            raise
+            reader, writer = await self.get_sock()
+            header, header_data = await wait_for(recv_struct(reader, MQTTHeaderLayout), max_wait)
+        except TimeoutError:
+            return
 
         try:
-            self.RECV_HELPER[header.type](self, header)
+            await self.RECV_HELPER[header.type](self, header)
         except KeyError:
             print()
-            print(f"mqtt.process: Unknown header type {header.type}")
-            print(f"mqtt.process: DEBUG {hexlify(header_data)}")
+            print(f"mqtt.process_one: Unknown header type {header.type}")
+            print(f"mqtt.process_one: DEBUG {hexlify(header_data)}")
             raise

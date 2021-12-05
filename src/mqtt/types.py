@@ -1,3 +1,4 @@
+# noinspection PyUnresolvedReferences
 from uctypes import BF_LEN, BF_POS, BFUINT8, UINT8, UINT16
 
 MQTTHeaderLayout = {

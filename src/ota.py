@@ -1,3 +1,4 @@
+from binascii import hexlify
 from hashlib import sha256
 
 from config import (
@@ -14,8 +15,8 @@ FW_DATA = bytearray()
 APP_DATA = bytearray()
 
 
-def setup_ota_subscriptions(client):
-    client.subscribe(
+async def setup_ota_subscriptions(client):
+    await client.subscribe(
         (MQTT_TOPIC_OTA_FW_DATA, 2, recv_ota_fw_data),
         (MQTT_TOPIC_OTA_FW_HASH, 2, recv_ota_fw_hash),
         (MQTT_TOPIC_OTA_APP_DATA, 2, recv_ota_app_data),
@@ -24,7 +25,7 @@ def setup_ota_subscriptions(client):
 
 
 # noinspection PyUnusedLocal
-def recv_ota_fw_data(client, topic, data, retained):
+async def recv_ota_fw_data(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_FW_DATA
     if retained:
         return
@@ -34,7 +35,7 @@ def recv_ota_fw_data(client, topic, data, retained):
     status.app_state = status.APP_RUNNING
 
 
-def recv_ota_fw_hash(client, topic, data, retained):
+async def recv_ota_fw_hash(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_FW_HASH
     if retained:
         return
@@ -44,18 +45,18 @@ def recv_ota_fw_hash(client, topic, data, retained):
 
     if fw_hash == data:
         print(f"main.recv_ota_fw_hash: Hash valid. OTA update not implemented.")
-        client.publish(MQTT_TOPIC_OTA_FW_OK, "1", 1)
+        await client.publish(MQTT_TOPIC_OTA_FW_OK, "1", 1)
         status.app_state = status.APP_IDLE
     else:
         print(f"main.recv_ota_fw_hash: Hash invalid! " +
-              f"actual (SHA256:{fw_hash.decode()}) != expected (SHA256:{data.decode()})")
-        client.publish(MQTT_TOPIC_OTA_FW_OK, "0", 1)
+              f"actual (SHA256:{hexlify(fw_hash)}) != expected (SHA256:{hexlify(data)})")
+        await client.publish(MQTT_TOPIC_OTA_FW_OK, "0", 1)
         FW_DATA = bytearray()
         status.app_state = status.APP_ERROR
 
 
 # noinspection PyUnusedLocal
-def recv_ota_app_data(client, topic, data, retained):
+async def recv_ota_app_data(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_APP_DATA
     if retained:
         return
@@ -65,7 +66,7 @@ def recv_ota_app_data(client, topic, data, retained):
     status.app_state = status.APP_RUNNING
 
 
-def recv_ota_app_hash(client, topic, data, retained):
+async def recv_ota_app_hash(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_APP_HASH
     if retained:
         return
@@ -75,11 +76,11 @@ def recv_ota_app_hash(client, topic, data, retained):
 
     if app_hash == data:
         print(f"main.recv_ota_app_hash: Hash valid. OTA update not implemented.")
-        client.publish(MQTT_TOPIC_OTA_APP_OK, "1", 1)
+        await client.publish(MQTT_TOPIC_OTA_APP_OK, "1", 1)
         status.app_state = status.APP_IDLE
     else:
         print(f"main.recv_ota_app_hash: Hash invalid! " +
-              f"actual ({app_hash}) != expected ({data})")
-        client.publish(MQTT_TOPIC_OTA_APP_OK, "0", 1)
+              f"actual ({hexlify(app_hash)}) != expected ({hexlify(data)})")
+        await client.publish(MQTT_TOPIC_OTA_APP_OK, "0", 1)
         APP_DATA = bytearray()
         status.app_state = status.APP_ERROR

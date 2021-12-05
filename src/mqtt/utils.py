@@ -8,8 +8,8 @@ def new_struct(layout, data=None):
     return s, data
 
 
-def recv_struct(sock, layout):
-    data = sock.recv(sizeof(layout, BIG_ENDIAN))
+async def recv_struct(reader, layout):
+    data = await reader.readexactly(sizeof(layout, BIG_ENDIAN))
     return new_struct(layout, data)
 
 
@@ -33,11 +33,12 @@ def encode_varlen_int(i):
     return bytes(parts)
 
 
-def recv_varlen_int(sock):
+async def recv_varlen_int(reader):
     multiplier = 1
     value = 0
     while True:
-        byte = int.from_bytes(sock.read(1), "big")
+        byte = await reader.readexactly(1)
+        byte = int.from_bytes(byte, "big")
         value += (byte & 127) * multiplier
         if byte & 128 == 0:
             return value

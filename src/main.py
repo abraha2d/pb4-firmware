@@ -86,10 +86,12 @@ async def main():
         keepalive=10,
     )
 
-    mqtt_client.publish(*status_online)
-    mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
+    create_task(mqtt_client.run())
 
-    setup_ota_subscriptions(mqtt_client)
+    await mqtt_client.publish(*status_online)
+    await mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
+
+    await setup_ota_subscriptions(mqtt_client)
 
     status.app_state = status.APP_IDLE
 
