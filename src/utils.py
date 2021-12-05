@@ -1,6 +1,6 @@
 from binascii import hexlify
 
-from utime import time
+from uasyncio import TimeoutError, sleep_ms, wait_for
 
 from upy_platform import status, wlan_sta
 
@@ -14,7 +14,14 @@ def get_device_name():
     return f"pb4_{mac}"
 
 
-def connect_wlan(ssid, password, timeout=30):
+async def wlan_is_connected():
+    while True:
+        if wlan_sta.isconnected():
+            return
+        await sleep_ms(100)
+
+
+async def connect_wlan(ssid, password, timeout=30):
     print(f"utils.connect_wlan: Connecting to {ssid} / {password} ...")
     status.network_state = status.NETWORK_SCANNING
 
@@ -22,8 +29,10 @@ def connect_wlan(ssid, password, timeout=30):
     wlan_sta.config(dhcp_hostname=get_device_name())
     wlan_sta.connect(ssid, password)
 
-    start_time = time()
-    while not wlan_sta.isconnected() and time() - start_time < timeout:
+    print(f"utils.connect_wlan: Waiting a maximum of {timeout} seconds...")
+    try:
+        await wait_for(wlan_is_connected(), timeout)
+    except TimeoutError:
         pass
 
     if wlan_sta.isconnected():

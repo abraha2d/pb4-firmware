@@ -1,3 +1,4 @@
+# noinspection PyUnresolvedReferences
 from uctypes import ARRAY, BF_LEN, BF_POS, BFUINT16, UINT8, UINT16, UINT32
 
 DNSHeaderLayout = {

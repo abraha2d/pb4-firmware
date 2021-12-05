@@ -1,90 +1,44 @@
-from _thread import start_new_thread, allocate_lock
-from errno import EAGAIN
-from socket import AF_INET, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET, getaddrinfo, socket
+from io import StringIO
+from sys import print_exception
+from time import time_ns
 
-from utime import sleep_ms
-
-try:
-    from sys import print_exception
-except ImportError:
-    print_exception = print
+from uasyncio import start_server
 
 from .utils import url_decode
 from .views import file_view
 
 
 class HTTPServer:
-    def __init__(self, ip_addr, urlconf, bind_addr=getaddrinfo("0.0.0.0", 80, AF_INET, SOCK_STREAM)[0][-1], start=True):
+    def __init__(self, ip_addr, urlconf):
         self.ip_addr = ip_addr
         self.urlconf = urlconf
-        self.bind_addr = bind_addr
-        self.run_lock = allocate_lock()
-        self.should_run = False
-        self.num_threads = 0
 
-        if start:
-            self.start()
+    async def serve(self):
+        server = await start_server(self.callback, '0.0.0.0', 80)
+        await server.wait_closed()
 
-    def start(self):
-        self.should_run = True
-        start_new_thread(self.run, ())
-
-    def run(self):
-        with self.run_lock:
-            try:
-                sock = socket(AF_INET, SOCK_STREAM)
-                sock.setblocking(False)
-                sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-                sock.bind(self.bind_addr)
-                sock.listen(5)
-
-                while self.should_run:
-                    sleep_ms(1)
-                    if self.num_threads >= 4:
-                        continue
-
-                    try:
-                        conn, addr = sock.accept()
-                    except OSError as e:
-                        if e.errno == EAGAIN:
-                            continue
-                        raise
-
-                    try:
-                        start_new_thread(self.process, (conn,))
-                    except OSError:
-                        print("http.run: could not start new thread!")
-                        conn.close()
-            finally:
-                sock.close()
-
-    def stop(self):
-        self.should_run = False
-        while self.run_lock.locked():
-            pass
-
-    def process(self, conn):
-        self.num_threads += 1
-
+    async def callback(self, reader, writer):
         request = bytearray()
         while True:
-            try:
-                chunk = conn.recv(4096)
-            except OSError:
-                return
-            if chunk == b"":
+            chunk = await reader.read(4096)
+            if len(chunk) == 0:
                 break
-            request += chunk
+            request.extend(chunk)
             if b"\r\n\r\n" in request:
                 break
         request = request.decode("ISO-8859-1")
+        request_lines = request.split("\r\n")
 
         try:
-            status, headers, data = self.get_response(request)
+            status, headers, data = await self.get_response(request_lines)
         except Exception as e:
             # get_response includes a try/except to catch view exceptions (status 500)
             # If it throws an exception, that means the request is malformed (status 400)
-            status, headers, data = 400, {}, f"{type(e)}: {str(e)}"
+            sio = StringIO()
+            print_exception(e, sio)
+            status, headers, data = 400, {}, f"400 Bad Request\r\n{sio.getvalue()}"
+
+        print(f'[{time_ns() / 1000000000:14.3f}] "{request_lines[0]}" {status}')
 
         headers = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
         response = f"HTTP/1.1 {status} \r\n{headers}\r\n"
@@ -94,15 +48,14 @@ class HTTPServer:
                 data = str(data)
             data = data.encode("ISO-8859-1")
 
-        conn.send(response.encode() + data)
-        conn.close()
+        writer.write(response.encode("ISO-8859-1") + data)
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
 
-        self.num_threads -= 1
-
-    def get_response(self, request):
-        request_lines = request.split("\r\n")
-
+    async def get_response(self, request_lines):
         method, uri, _ = request_lines[0].split(" ")
+
         if method != "GET":
             return 501, {}, ""
 
@@ -123,7 +76,9 @@ class HTTPServer:
         view = self.urlconf.get(path, file_view)
 
         try:
-            return view(path, query_dict, headers)
+            status, headers, data = await view(path, query_dict, headers)
+            return status, headers, data
         except Exception as e:
-            print_exception(e)
-            return 500, {}, f"{type(e)}: {str(e)}"
+            sio = StringIO()
+            print_exception(e, sio)
+            return 500, {}, f"500 Internal Server Error\r\n{sio.getvalue()}"

@@ -11,8 +11,9 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
-      <excludeFolder url="file://$MODULE_DIR$/staging" />
       <excludeFolder url="file://$MODULE_DIR$/src/captive_portal/www" />
+      <excludeFolder url="file://$MODULE_DIR$/staging" />
+      <excludeFolder url="file://$MODULE_DIR$/uasyncio" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

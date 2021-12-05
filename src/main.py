@@ -1,10 +1,7 @@
-import micropython
-
-micropython.alloc_emergency_exception_buf(100)
-
 from os import uname
 
 from machine import reset
+from uasyncio import create_task, get_event_loop, run, sleep_ms
 
 from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
@@ -19,11 +16,11 @@ from config import (
 )
 from ota import setup_ota_subscriptions
 from upy_platform import boot, status, wlan_ap, wlan_sta
-from utils import get_device_mac, get_device_name, connect_wlan
+from utils import get_device_mac, get_device_name, connect_wlan, wlan_is_connected
 from views import urlconf
 
 
-def do_setup():
+async def do_setup():
     print("main.do_setup: Starting hotspot...")
     wlan_ap.active(True)
 
@@ -34,50 +31,51 @@ def do_setup():
     )
 
     ip_address = wlan_ap.ifconfig()[0]
-    dns_server = DNSServer(ip_address)
-    http_server = HTTPServer(ip_address, urlconf)
+    dns_task = create_task(DNSServer(ip_address).serve())
+    http_task = create_task(HTTPServer(ip_address, urlconf).serve())
 
+    print("main.do_setup: Waiting for configuration...")
     status.network_state = status.NETWORK_HOTSPOT
-    while not wlan_sta.isconnected():
-        pass
+    await wlan_is_connected()
 
     print("main.do_setup: Stopping hotspot...")
-    http_server.stop()
-    dns_server.stop()
     wlan_ap.active(False)
+    dns_task.cancel()
+    http_task.cancel()
 
 
-def do_connect():
+async def do_connect():
     wlan_config = get_wlan_config()
 
     if wlan_config is not None:
         wlan_ssid, wlan_pass = wlan_config
-        connect_wlan(wlan_ssid, wlan_pass)
+        await connect_wlan(wlan_ssid, wlan_pass)
     else:
-        print("main.do_connect: No config.")
+        print("main.do_connect: No configuration.")
 
     if not wlan_sta.isconnected():
-        do_setup()
+        await do_setup()
 
 
 def do_reset():
     erase_wlan_config()
 
 
-def main():
-    print("main.main: Booting... hold BOOT while the LED is magenta to factory reset.")
+async def main():
+    print("main.main: Booting... hold BOOT within the next second to factory reset.")
     status.app_state = status.APP_BOOTING
     await sleep_ms(1000)
 
     if boot.value():
-        print("main.main: Resetting...")
+        print("main.main: Performing factory reset...")
         status.app_state = status.APP_RESETTING
         do_reset()
         print("main.main: Rebooting...")
         reset()
 
-    do_connect()
+    await do_connect()
 
+    print("main.main: Starting MQTT client...")
     status_offline = [MQTT_TOPIC_STATUS, "0", 1, True]
     status_online = [MQTT_TOPIC_STATUS, "1", 1, True]
 
@@ -95,6 +93,9 @@ def main():
 
     status.app_state = status.APP_IDLE
 
+    loop = get_event_loop()
+    loop.run_forever()
+
 
 if __name__ == '__main__':
-    main()
+    run(main())
