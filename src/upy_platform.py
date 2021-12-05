@@ -1,5 +1,3 @@
-from _thread import allocate_lock, start_new_thread
-
 # noinspection PyUnresolvedReferences
 from esp32 import NVS
 # noinspection PyUnresolvedReferences
@@ -7,7 +5,7 @@ from machine import I2C, Pin, PWM, Signal, TouchPad
 # noinspection PyUnresolvedReferences
 from network import AP_IF, STA_IF, WLAN
 
-from utime import sleep_ms
+from uasyncio import Event, Lock, create_task, sleep_ms
 
 boot = Signal(0, Pin.IN, invert=True)
 
@@ -56,7 +54,7 @@ class StatusLED:
     NETWORK_CONNECTED = BLUE, False
     NETWORK_HOTSPOT = WHITE, False
 
-    def __init__(self, start=True):
+    def __init__(self):
         self.r = PWM(Pin(27), freq=40000, duty=1023)
         self.g = PWM(Pin(14), freq=40000, duty=1023)
         self.b = PWM(Pin(12), freq=40000, duty=1023)
@@ -64,47 +62,31 @@ class StatusLED:
         self.network_state = None
         self.app_state = None
 
-        self.run_lock = allocate_lock()
-        self.should_run = False
-
-        if start:
-            self.start()
-
     def write(self, color):
         r, g, b = color
-        self.r.duty(int((1 - r) * 512 + 511))
-        self.g.duty(int((1 - g) * 512 + 511))
-        self.b.duty(int((1 - b) * 512 + 511))
+        self.r.duty(int((1 - r) * 1023))
+        self.g.duty(int((1 - g) * 1023))
+        self.b.duty(int((1 - b) * 1023))
 
-    def show(self, color, blink=False):
+    async def show(self, color, blink=False):
         if blink:
             for _ in range(10):
                 self.write(color)
-                sleep_ms(100)
+                await sleep_ms(100)
                 self.write(self.BLACK)
-                sleep_ms(100)
+                await sleep_ms(100)
         else:
             self.write(color)
-            sleep_ms(2000)
+            await sleep_ms(2000)
 
-    def start(self):
-        self.should_run = True
-        start_new_thread(self.run, ())
-
-    def run(self):
-        with self.run_lock:
-            while self.should_run:
-                if self.network_state is not None:
-                    self.show(*self.network_state)
-                if self.app_state is not None:
-                    self.show(*self.app_state)
-                if self.network_state is None and self.app_state is None:
-                    self.write(self.BLACK)
-
-    def stop(self):
-        self.should_run = False
-        while self.run_lock.locked():
-            pass
+    async def run(self):
+        while True:
+            if self.network_state is not None:
+                await self.show(*self.network_state)
+            if self.app_state is not None:
+                await self.show(*self.app_state)
+            if self.network_state is None and self.app_state is None:
+                await self.show(self.BLACK)
 
 
 status = StatusLED()

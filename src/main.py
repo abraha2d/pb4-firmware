@@ -67,6 +67,8 @@ def do_reset():
 async def main():
     print("main.main: Booting... hold BOOT within the next second to factory reset.")
     status.app_state = status.APP_BOOTING
+
+    status_task = create_task(status.run())
     await sleep_ms(1000)
 
     if boot.value():
@@ -89,7 +91,7 @@ async def main():
         keepalive=10,
     )
 
-    create_task(mqtt_client.run())
+    mqtt_task = create_task(mqtt_client.run())
 
     await mqtt_client.publish(*status_online)
     await mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
