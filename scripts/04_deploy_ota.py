@@ -1,48 +1,53 @@
 from binascii import hexlify
 from hashlib import sha256
+from sys import argv
 
 import paho.mqtt.client as mqtt
 
-APP_BIN = "build/app.bin"
-DEVICE_ID = "dbd5a8"
+DATA_TOPIC = "/pb4/devices/{}/ota/{}/data"
+HASH_TOPIC = "/pb4/devices/{}/ota/{}/sha256"
+OK_TOPIC = "/pb4/devices/{}/ota/{}/ok"
 
-DATA_TOPIC = f"/pb4/devices/{DEVICE_ID}/ota/app/data"
-HASH_TOPIC = f"/pb4/devices/{DEVICE_ID}/ota/app/sha256"
-OK_TOPIC = f"/pb4/devices/{DEVICE_ID}/ota/app/ok"
+OTA_TYPE = None
+OTA_DEVICE = None
 
-MESSAGE_DATA = None
-MESSAGE_HASH = None
+OTA_DATA = None
+OTA_HASH = None
 
 
+# noinspection PyUnusedLocal
 def on_connect(client, userdata, flags, rc):
-    global MESSAGE_DATA
+    global OTA_DATA
 
     client.on_connect = None
     print(" connected.")
     print("Publishing data...", end="", flush=True)
-    client.publish(DATA_TOPIC, MESSAGE_DATA, qos=2)
-    MESSAGE_DATA = None
+    client.publish(DATA_TOPIC.format(OTA_DEVICE, OTA_TYPE), OTA_DATA, qos=2)
+    OTA_DATA = None
 
 
+# noinspection PyUnusedLocal
 def on_publish(client, userdata, mid):
-    global MESSAGE_HASH
+    global OTA_HASH
 
-    if MESSAGE_HASH is not None:
+    if OTA_HASH is not None:
         print(" done.")
         print("Publishing hash...", end="", flush=True)
-        client.publish(HASH_TOPIC, MESSAGE_HASH, qos=2)
-        MESSAGE_HASH = None
+        client.publish(HASH_TOPIC.format(OTA_DEVICE, OTA_TYPE), OTA_HASH, qos=2)
+        OTA_HASH = None
     else:
         print(" done.")
         print("Subscribing...", end="", flush=True)
-        client.subscribe(OK_TOPIC, qos=1)
+        client.subscribe(OK_TOPIC.format(OTA_DEVICE, OTA_TYPE), qos=1)
 
 
+# noinspection PyUnusedLocal
 def on_subscribe(client, userdata, mid, granted_qos):
     print(" done.")
     print("Waiting for OK...", end="", flush=True)
 
 
+# noinspection PyUnusedLocal
 def on_message(client, userdata, message):
     if message.payload == b"1":
         print(" OK.")
@@ -53,7 +58,12 @@ def on_message(client, userdata, message):
 
 
 def main():
-    global MESSAGE_DATA, MESSAGE_HASH
+    global OTA_DATA, OTA_DEVICE, OTA_HASH, OTA_TYPE
+
+    OTA_TYPE = argv[1]
+    OTA_DEVICE = argv[2]
+
+    bin_file = f"build/{OTA_TYPE}.bin"
 
     client = mqtt.Client()
     client.on_connect = on_connect
@@ -61,15 +71,15 @@ def main():
     client.on_subscribe = on_subscribe
     client.on_message = on_message
 
-    print(f"Reading {APP_BIN}...", end="", flush=True)
-    with open(APP_BIN, "rb") as payload_file:
-        MESSAGE_DATA = payload_file.read()
-        print(f" done. {len(MESSAGE_DATA)} bytes.")
+    print(f"Reading {bin_file}...", end="", flush=True)
+    with open(bin_file, "rb") as payload_file:
+        OTA_DATA = payload_file.read()
+        print(f" done. {len(OTA_DATA)} bytes.")
 
         print("Hashing...", end="", flush=True)
-        MESSAGE_HASH = sha256(MESSAGE_DATA).digest()
+        OTA_HASH = sha256(OTA_DATA).digest()
         print(" done.")
-        print(f"SHA256: {hexlify(MESSAGE_HASH).decode()}")
+        print(f"SHA256: {hexlify(OTA_HASH).decode()}")
 
     print("Connecting to MQTT broker...", end="", flush=True)
     client.connect("pb4_control.local", keepalive=1)

@@ -23,6 +23,7 @@ def setup_ota_subscriptions(client):
     )
 
 
+# noinspection PyUnusedLocal
 def recv_ota_fw_data(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_FW_DATA
     if retained:
@@ -53,6 +54,7 @@ def recv_ota_fw_hash(client, topic, data, retained):
         status.app_state = status.APP_ERROR
 
 
+# noinspection PyUnusedLocal
 def recv_ota_app_data(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_APP_DATA
     if retained:

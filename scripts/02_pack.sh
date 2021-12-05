@@ -9,7 +9,7 @@ VFS_ALIGN=0x10000
 scripts/01_stage.sh
 
 mkdir -p build
-rm -rf build/*
+rm -rf build/app.bin
 
 APP_SIZE=$(du -bd0 staging | xargs | cut -d' ' -f1)
 VFS_SIZE=$((((APP_SIZE + VFS_EXTRA) / VFS_ALIGN + 1) * VFS_ALIGN))

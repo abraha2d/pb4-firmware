@@ -1,6 +1,7 @@
 import { Network, RawNetwork } from "./types";
 
 export enum NETWORK_AUTHMODES {
+  // noinspection JSUnusedGlobalSymbols
   Open,
   WEP,
   WPA_PSK,

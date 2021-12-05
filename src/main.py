@@ -67,12 +67,11 @@ def do_reset():
 def main():
     print("main.main: Booting... hold BOOT while the LED is magenta to factory reset.")
     status.app_state = status.APP_BOOTING
-    status.wait_for_app_display()
+    await sleep_ms(1000)
 
     if boot.value():
         print("main.main: Resetting...")
         status.app_state = status.APP_RESETTING
-        status.wait_for_app_display()  # TODO: set `wait_for_end` to False
         do_reset()
         print("main.main: Rebooting...")
         reset()
