@@ -60,8 +60,16 @@ async def recv_fw_hash(client, topic, data, retained):
 
         try:
             print(f"ota.recv_fw_hash: Writing update to partition '{part_label}'...")
+
+            block_size = to_update.ioctl(5, None)
+            block_num = ceil(len(FW_DATA) / block_size)
+            print(f"ota.recv_app_hash: INFO block size {block_size} bytes => {block_num} blocks")
+
             handle = to_update.ota_begin(len(FW_DATA))
-            to_update.ota_write(handle, FW_DATA)  # TODO: This blocks like crazy
+            for i in range(block_num):
+                await sleep_ms(0)
+                start, end = i * block_size, (i + 1) * block_size
+                to_update.ota_write(handle, FW_DATA[start:end])
             to_update.ota_end(handle)
 
             print(f"ota.recv_fw_hash: Success. Choosing '{part_label}' for next boot...")
