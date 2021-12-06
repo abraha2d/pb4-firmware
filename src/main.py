@@ -1,4 +1,3 @@
-from errno import EPERM
 from os import uname
 
 # noinspection PyUnresolvedReferences
@@ -65,7 +64,8 @@ def do_reset():
 
 
 async def main():
-    print("main.main: Booting... hold BOOT within the next second to factory reset.")
+    part_label = Partition(Partition.RUNNING).info()[4]
+    print(f"main.main: Booting from '{part_label}'... hold BOOT within the next second to factory reset.")
     status.app_state = status.APP_BOOTING
 
     status_task = create_task(status.run())

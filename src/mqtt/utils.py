@@ -18,8 +18,9 @@ def encode_int(i, s=2):
 
 
 def decode_int(data):
-    i = int.from_bytes(data[:2], "big")
-    return i, data[2:]
+    mv = memoryview(data)
+    i = int.from_bytes(mv[:2], "big")
+    return i, mv[2:]
 
 
 def encode_varlen_int(i):
@@ -52,5 +53,10 @@ def encode_str(s):
 
 
 def decode_str(data):
-    str_len, data = decode_int(data)
-    return data[:str_len], data[str_len:]
+    mv = memoryview(data)
+    str_len, mv = decode_int(mv)
+    if str_len == 1:
+        s = bytes([mv[0]])
+    else:
+        s = bytes(mv[:str_len])
+    return s, mv[str_len:]

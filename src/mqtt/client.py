@@ -1,10 +1,10 @@
+import gc
 from binascii import hexlify
 from errno import ECONNRESET
-from gc import collect
 from socket import getaddrinfo
 from time import time
 
-from uasyncio import Event, Lock, TimeoutError, open_connection, sleep_ms, wait_for
+from uasyncio import Event, Lock, core, create_task, open_connection, sleep_ms
 
 from .constants import (
     PROTOCOL,
@@ -280,13 +280,26 @@ class MQTTClient:
         else:
             self.connected.set()
 
+    @staticmethod
+    async def bulk_read(reader, n):
+        gc.collect()
+        r = bytearray(n)
+        mv = memoryview(r)
+        while n:
+            yield core._io_queue.queue_read(reader.s)
+            r2 = reader.s.readinto(mv[-n:], n)
+            if not r2:
+                raise EOFError
+            n -= r2
+        return r
+
     async def recv_publish(self, header):
         assert header.type == TYPE_PUBLISH
         reader, writer = await self.get_sock()
         data_len = await recv_varlen_int(reader)
-        collect()
-        print(f"mqtt.recv_publish: Attempting to receive {data_len} bytes...")
-        data = await reader.readexactly(data_len)
+        if data_len > 1024:
+            print(f"mqtt.recv_publish: Receiving {data_len} bytes...")
+        data = await self.bulk_read(reader, data_len)
 
         topic, data = decode_str(data)
 
@@ -361,42 +374,50 @@ class MQTTClient:
     }
 
     async def run(self):
+        keepalive_task = create_task(self.process_keepalive())
         while True:
             try:
                 await self.connect()
                 while True:
-                    await self.process_one()
+                    await self.process_receive()
             except KeyError:
-                # Caught and released in process_one()
+                # Caught and released in process_receive()
                 continue
             except EOFError:
-                print("mqtt.run: WARNING received truncated message")
                 continue
             except OSError as e:
                 if e.errno == ECONNRESET:
-                    # This means we messed up on sending pings... probably because of a large message
-                    # TODO: figure out how to send pings even when in the middle of a large receive
                     continue
                 raise
             finally:
                 await self.disconnect()
 
-    async def process_one(self):
-        if self.connected.is_set() and time() - self.last_activity > self.keepalive:
-            await self.send_pingreq()
+    async def process_keepalive(self):
+        while True:
+            if self.connected.is_set():
+                time_to_ping = self.keepalive - (time() - self.last_activity)
+                if time_to_ping <= 0:
+                    try:
+                        await self.send_pingreq()
+                    except EOFError:
+                        continue
+                    except OSError as e:
+                        if e.errno == ECONNRESET:
+                            continue
+                        raise
+                else:
+                    await sleep_ms(time_to_ping * 1000)
+            else:
+                await self.connected.wait()
 
-        max_wait = self.keepalive - (time() - self.last_activity)
-
-        try:
-            reader, writer = await self.get_sock()
-            header, header_data = await wait_for(recv_struct(reader, MQTTHeaderLayout), max_wait)
-        except TimeoutError:
-            return
+    async def process_receive(self):
+        reader, writer = await self.get_sock()
+        header, header_data = await recv_struct(reader, MQTTHeaderLayout)
 
         try:
             await self.RECV_HELPER[header.type](self, header)
         except KeyError:
             print()
-            print(f"mqtt.process_one: Unknown header type {header.type}")
-            print(f"mqtt.process_one: DEBUG {hexlify(header_data)}")
+            print(f"mqtt.process_receive: Unknown header type {header.type}")
+            print(f"mqtt.process_receive: DEBUG {hexlify(header_data)}")
             raise
