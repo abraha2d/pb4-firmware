@@ -41,7 +41,7 @@ async def recv_fw_data(client, topic, data, retained):
     FW_DATA = data
 
     print(f"ota.recv_fw_data: Received {len(data)} bytes.")
-    status.app_state = status.APP_RUNNING
+    status.app_state = status.APP_UPGRADING
 
 
 async def recv_fw_hash(client, topic, data, retained):
@@ -77,10 +77,11 @@ async def recv_fw_hash(client, topic, data, retained):
 
             print(f"ota.recv_fw_hash: Done. Communicating status to broker...")
             await client.publish(MQTT_TOPIC_OTA_FW_OK, "1", 1)
-            status.app_state = status.APP_IDLE
 
             print(f"ota.recv_fw_hash: OK. Rebooting in 5 seconds...")
+            status.app_state = status.APP_SHUTDOWN
             await sleep_ms(5000)
+            status.write(status.BLACK)
             reset()
             return
         except OSError as e:
@@ -103,7 +104,7 @@ async def recv_app_data(client, topic, data, retained):
     global APP_DATA
     APP_DATA = data
     print(f"ota.recv_app_data: Received {len(data)} bytes.")
-    status.app_state = status.APP_RUNNING
+    status.app_state = status.APP_UPGRADING
 
 
 async def recv_app_hash(client, topic, data, retained):
@@ -132,10 +133,11 @@ async def recv_app_hash(client, topic, data, retained):
 
             print(f"ota.recv_app_hash: Done. Communicating status to broker...")
             await client.publish(MQTT_TOPIC_OTA_APP_OK, "1", 1)
-            status.app_state = status.APP_IDLE
 
             print(f"ota.recv_app_hash: OK. Rebooting in 5 seconds...")
+            status.app_state = status.APP_SHUTDOWN
             await sleep_ms(5000)
+            status.write(status.BLACK)
             reset()
             return
         except OSError as e:

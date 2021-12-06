@@ -76,7 +76,9 @@ async def main():
         print("main.main: Performing factory reset...")
         status.app_state = status.APP_RESETTING
         do_reset()
-        print("main.main: Rebooting...")
+        print("main.main: Done. Rebooting in 5 seconds...")
+        await sleep_ms(5000)
+        status.write(status.BLACK)
         reset()
 
     await do_connect()

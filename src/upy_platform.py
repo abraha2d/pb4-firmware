@@ -40,9 +40,12 @@ class StatusLED:
     MAGENTA = [1, 0, 1]
     RED = [1, 0, 0]
     WHITE = [1, 1, 1]
-    YELLOW = [1, 1, 0]
+    YELLOW = [1, 0.5, 0]
 
     APP_BOOTING = MAGENTA, False
+    APP_SHUTDOWN = YELLOW, False
+
+    APP_UPGRADING = YELLOW, True
     APP_RESETTING = MAGENTA, True
 
     APP_IDLE = GREEN, False
