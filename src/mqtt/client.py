@@ -324,7 +324,7 @@ class MQTTClient:
                 packet_idx = [i[0] for i in outbound_wait].index(puback.packet_id)
             except ValueError:
                 print(f"mqtt.recv_puback({header.type}): WARNING {puback.packet_id} not in {outbound_wait}")
-                print(f"mqtt.recv_puback({header.type}): DEBUG {hexlify(puback_data)}")
+                print(f"mqtt.recv_puback({header.type}): DEBUG {hexlify(puback_data).decode()}")
                 return
 
             packet_info = outbound_wait.pop(packet_idx)
@@ -341,14 +341,14 @@ class MQTTClient:
             suback_wait.pop([i[0] for i in suback_wait].index(suback.packet_id))
         except ValueError:
             print(f"mqtt.recv_suback({header.type}): WARNING {suback.packet_id} not in {suback_wait}")
-            print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data)}")
+            print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data).decode()}")
 
         for i in range(suback.length - 2):
             byte = await reader.readexactly(1)
             return_code = int.from_bytes(byte, "big")
             if return_code > 2:
                 print(f"mqtt.recv_suback({header.type}): WARNING return code {return_code} > 2")
-                print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data)}")
+                print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data).decode()}")
 
     async def recv_pingresp(self, header):
         assert header.type == TYPE_PINGRESP
@@ -419,5 +419,5 @@ class MQTTClient:
         except KeyError:
             print()
             print(f"mqtt.process_receive: Unknown header type {header.type}")
-            print(f"mqtt.process_receive: DEBUG {hexlify(header_data)}")
+            print(f"mqtt.process_receive: DEBUG {hexlify(header_data).decode()}")
             raise

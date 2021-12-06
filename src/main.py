@@ -65,7 +65,8 @@ def do_reset():
 
 async def main():
     part_label = Partition(Partition.RUNNING).info()[4]
-    print(f"main.main: Booting from '{part_label}'... hold BOOT within the next second to factory reset.")
+    print(f"main.main: Booted MicroPython from '{part_label}'.")
+    print("main.main: Hold BOOT within the next second to factory reset...")
     status.app_state = status.APP_BOOTING
 
     status_task = create_task(status.run())
