@@ -117,12 +117,14 @@ async def recv_app_hash(client, topic, data, retained):
             block_size = to_update.ioctl(5, None)
             block_num = ceil(len(APP_DATA) / block_size)
             print(f"ota.recv_app_hash: INFO block size {block_size} bytes => {block_num} blocks")
-            to_update.writeblocks(block_num, APP_DATA)
+            for i in range(block_num):
+                await sleep_ms(0)
+                start, end = i * block_size, (i + 1) * block_size
+                to_update.writeblocks(i, APP_DATA[start:end])
 
             print(f"ota.recv_app_hash: Done. Communicating status to broker...")
             await client.publish(MQTT_TOPIC_OTA_APP_OK, "1", 1)
             status.app_state = status.APP_IDLE
-
 
             print(f"ota.recv_app_hash: OK. Rebooting in 5 seconds...")
             await sleep_ms(5000)
