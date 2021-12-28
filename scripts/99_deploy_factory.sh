@@ -3,5 +3,7 @@
 set -e
 set -o pipefail
 
-VFS_OFFSET=$(grep factory partitions.csv | cut -d, -f4 | xargs)
-esptool.py --baud 2000000 write_flash "$VFS_OFFSET" build/fw.bin
+scripts/10_deploy_bl.sh
+scripts/11_deploy_pt.sh
+scripts/12_deploy_fw.sh
+scripts/13_deploy_app.sh
