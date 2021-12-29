@@ -1,7 +1,6 @@
 from upy_platform import nvs
 from utils import get_device_mac
 
-
 MQTT_SERVER = "pb4_control.local"
 MQTT_DEVICE_BASE = f"/pb4/devices/{get_device_mac()}"
 
@@ -39,7 +38,13 @@ def set_wlan_config(wlan_ssid, wlan_pass):
 
 
 def erase_wlan_config():
-    nvs.erase_key("wlan_ssid")
-    nvs.erase_key("wlan_ssid_len")
-    nvs.erase_key("wlan_pass")
-    nvs.erase_key("wlan_pass_len")
+    try:
+        nvs.erase_key("wlan_ssid")
+        nvs.erase_key("wlan_ssid_len")
+        nvs.erase_key("wlan_pass")
+        nvs.erase_key("wlan_pass_len")
+    except OSError as e:
+        if e.errno == -4354:  # ESP_ERR_NVS_NOT_FOUND
+            print("config.erase_wlan_config: NVS not found.")
+            return
+        raise

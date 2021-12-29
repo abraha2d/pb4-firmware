@@ -17,7 +17,7 @@ from config import (
     get_wlan_config,
 )
 from ota import setup_ota_subscriptions
-from upy_platform import boot, status, wlan_ap, wlan_sta
+from upy_platform import boot, status, version, wlan_ap, wlan_sta
 from utils import get_device_mac, get_device_name, connect_wlan, wlan_is_connected
 from views import urlconf
 
@@ -81,25 +81,29 @@ async def main():
         status.write(status.BLACK)
         reset()
 
-    await do_connect()
+    if version == 4:
+        await do_connect()
 
-    print("main.main: Starting MQTT client...")
-    status_offline = [MQTT_TOPIC_STATUS, "0", 1, True]
-    status_online = [MQTT_TOPIC_STATUS, "1", 1, True]
+        print("main.main: Starting MQTT client...")
+        status_offline = [MQTT_TOPIC_STATUS, "0", 1, True]
+        status_online = [MQTT_TOPIC_STATUS, "1", 1, True]
 
-    mqtt_client = MQTTClient(
-        server=MQTT_SERVER,
-        client_id=get_device_mac(),
-        lwt=status_offline,
-        keepalive=10,
-    )
+        mqtt_client = MQTTClient(
+            server=MQTT_SERVER,
+            client_id=get_device_mac(),
+            lwt=status_offline,
+            keepalive=10,
+        )
 
-    mqtt_task = create_task(mqtt_client.run())
+        mqtt_task = create_task(mqtt_client.run())
 
-    await mqtt_client.publish(*status_online)
-    await mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
+        await mqtt_client.publish(*status_online)
+        await mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
 
-    await setup_ota_subscriptions(mqtt_client)
+        await setup_ota_subscriptions(mqtt_client)
+    else:
+        assert version == 2
+        print("main.main: PottyBox 2.0 has Wi-Fi issues. Not starting network-connected features...")
 
     status.app_state = status.APP_IDLE
 
@@ -107,6 +111,7 @@ async def main():
     if Partition(Partition.RUNNING).info()[4] != "factory":
         Partition.mark_app_valid_cancel_rollback()
 
+    print("main.main: Starting event loop...")
     loop = get_event_loop()
     loop.run_forever()
 

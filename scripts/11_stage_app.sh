@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-scripts/00_build_ui.sh
+scripts/10_build_ui.sh
 
 mkdir -p staging
 rm -rf staging/*
