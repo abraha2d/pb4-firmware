@@ -5,6 +5,7 @@ from esp32 import Partition
 from machine import reset
 from uasyncio import create_task, get_event_loop, run, sleep_ms
 
+from apps.whcontrol import main as whcontrol_main
 from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
 from mqtt.client import MQTTClient
@@ -81,7 +82,9 @@ async def main():
         status.write(status.BLACK)
         reset()
 
-    if version == 4:
+    if version == 2:
+        print("main.main: PottyBox 2.0 has Wi-Fi issues. Not starting network-connected features...")
+    else:
         await do_connect()
 
         print("main.main: Starting MQTT client...")
@@ -101,15 +104,21 @@ async def main():
         await mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
 
         await setup_ota_subscriptions(mqtt_client)
-    else:
-        assert version == 2
-        print("main.main: PottyBox 2.0 has Wi-Fi issues. Not starting network-connected features...")
 
     status.app_state = status.APP_IDLE
 
     # TODO: try to run as much initialization as possible before calling this
     if Partition(Partition.RUNNING).info()[4] != "factory":
         Partition.mark_app_valid_cancel_rollback()
+
+    if version == 2:
+        print("main.main: Detected PottyBox 2.0, starting WHControl app...")
+        whcontrol_task = create_task(whcontrol_main())
+    else:
+        # TODO: get from MQTT
+        if get_device_mac() == "dbd4c4":
+            print("main.main: Starting WHControl app...")
+            whcontrol_task = create_task(whcontrol_main())
 
     print("main.main: Starting event loop...")
     loop = get_event_loop()

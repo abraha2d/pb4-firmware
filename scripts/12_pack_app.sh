@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-VFS_EXTRA=94754
+VFS_EXTRA=102402
 VFS_ALIGN=0x10000
 
 scripts/11_stage_app.sh
