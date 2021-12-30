@@ -5,7 +5,6 @@ from esp32 import Partition
 from machine import reset
 from uasyncio import create_task, get_event_loop, run, sleep_ms
 
-from apps.whcontrol import main as whcontrol_main
 from captive_portal.dns.server import DNSServer
 from captive_portal.http.server import HTTPServer
 from mqtt.client import MQTTClient
@@ -64,6 +63,12 @@ def do_reset():
     erase_wlan_config()
 
 
+def exc_handler(loop, context):
+    status.app_state = status.APP_ERROR
+    # TODO: Send error with traceback to MQTT
+    return loop.default_exception_handler(loop, context)
+
+
 async def main():
     part_label = Partition(Partition.RUNNING).info()[4]
     print(f"main.main: Booted MicroPython from '{part_label}'.")
@@ -84,6 +89,7 @@ async def main():
 
     if version == 2:
         print("main.main: PottyBox 2.0 has Wi-Fi issues. Not starting network-connected features...")
+        mqtt_client = None
     else:
         await do_connect()
 
@@ -111,17 +117,32 @@ async def main():
     if Partition(Partition.RUNNING).info()[4] != "factory":
         Partition.mark_app_valid_cancel_rollback()
 
+    app_config = []
+
     if version == 2:
-        print("main.main: Detected PottyBox 2.0, starting WHControl app...")
-        whcontrol_task = create_task(whcontrol_main())
+        print("main.main: Note: MQTT not available, using hardcoded configuration.")
+        app_config = [
+            "whcontrol",
+        ]
     else:
-        # TODO: get from MQTT
+        # TODO: get config from MQTT
+        app_config.append("webrepl")
+
         if get_device_mac() == "dbd4c4":
-            print("main.main: Starting WHControl app...")
-            whcontrol_task = create_task(whcontrol_main())
+            app_config.append("whcontrol")
+
+    for app_id in app_config:
+        try:
+            app = getattr(__import__(f"apps.{app_id}"), app_id)
+            app_name = getattr(app, "NAME", app_id)
+            print(f"main.main: Starting app '{app_name}'...")
+            app_task = create_task(app.main(mqtt_client))
+        except ImportError:
+            print(f"main.main: Skipping unknown app ID '{app_id}'...")
 
     print("main.main: Starting event loop...")
     loop = get_event_loop()
+    loop.set_exception_handler(exc_handler)
     loop.run_forever()
 
 

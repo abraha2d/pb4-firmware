@@ -1,15 +1,11 @@
 from os import uname
 
 # noinspection PyUnresolvedReferences
-from ds18x20 import DS18X20
-# noinspection PyUnresolvedReferences
 from esp32 import NVS
 # noinspection PyUnresolvedReferences
 from machine import I2C, Pin, PWM, Signal, TouchPad
 # noinspection PyUnresolvedReferences
 from network import AP_IF, STA_IF, WLAN
-# noinspection PyUnresolvedReferences
-from onewire import OneWire
 
 from uasyncio import sleep_ms
 
@@ -41,14 +37,8 @@ s2_shut = Signal(23, Pin.OUT, value=1, invert=True) if version == 4 else FakeSig
 touch_1_pin = Pin(32)
 touch_2_pin = Pin(33)
 
-if version == 2:
-    # TODO: Move to WHControl app
-    touch_2_pin.init(mode=Pin.OUT, value=1)
-    ow = OneWire(touch_1_pin)
-    ds = DS18X20(ow)
-else:
-    touch_1 = TouchPad(touch_1_pin)
-    touch_2 = TouchPad(touch_2_pin)
+touch_1 = TouchPad(touch_1_pin)
+touch_2 = TouchPad(touch_2_pin)
 
 wlan_ap = WLAN(AP_IF)
 wlan_sta = WLAN(STA_IF)

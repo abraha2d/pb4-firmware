@@ -1,9 +1,10 @@
 import gc
 from binascii import hexlify
-from errno import ECONNRESET
+from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH
 from socket import getaddrinfo
 from time import time
 
+# noinspection PyUnresolvedReferences
 from uasyncio import Event, Lock, core, create_task, open_connection, sleep_ms
 
 from .constants import (
@@ -40,6 +41,8 @@ from .utils import (
     encode_str,
     decode_str,
 )
+
+errnos = [ECONNABORTED, ECONNRESET, EHOSTUNREACH]
 
 
 class MQTTClient:
@@ -135,7 +138,7 @@ class MQTTClient:
             await writer.drain()
         self.last_activity = time()
 
-    async def publish(self, topic: str, message: str, qos=0, retain=False):
+    async def send_publish(self, topic: str, message: str, qos: int, retain: bool):
         await self.connected.wait()
 
         header, header_data = new_struct(MQTTHeaderLayout)
@@ -157,6 +160,17 @@ class MQTTClient:
             writer.write(header_data + data_len + data)
             await writer.drain()
         self.last_activity = time()
+
+    async def publish(self, topic: str, message: str, qos=0, retain=False):
+        sent = False
+        while not sent:
+            try:
+                await self.send_publish(topic, message, qos, retain)
+                sent = True
+            except OSError as e:
+                if e.errno in errnos:
+                    continue
+                raise
 
     async def send_puback(self, packet_id, ack_type):
         puback, puback_data = new_struct(MQTTAckSendLayout)
@@ -216,12 +230,28 @@ class MQTTClient:
         self.last_activity = time()
 
     async def subscribe(self, *topics):
-        for topic, qos, cb in topics:
-            self.callbacks[topic] = cb
-        await self.send_subscribe(topics, TYPE_SUBSCRIBE)
+        sent = False
+        while not sent:
+            try:
+                for topic, qos, cb in topics:
+                    self.callbacks[topic] = cb
+                await self.send_subscribe(topics, TYPE_SUBSCRIBE)
+                sent = True
+            except OSError as e:
+                if e.errno in errnos:
+                    continue
+                raise
 
     async def unsubscribe(self, *topics):
-        await self.send_subscribe(topics, TYPE_UNSUBSCRIBE)
+        sent = False
+        while not sent:
+            try:
+                await self.send_subscribe(topics, TYPE_UNSUBSCRIBE)
+                sent = True
+            except OSError as e:
+                if e.errno in errnos:
+                    continue
+                raise
 
     async def send_pingreq(self):
         header, header_data = new_struct(MQTTHeaderLayout)
@@ -386,7 +416,7 @@ class MQTTClient:
             except EOFError:
                 continue
             except OSError as e:
-                if e.errno == ECONNRESET:
+                if e.errno in errnos:
                     continue
                 raise
             finally:
