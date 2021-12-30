@@ -86,6 +86,7 @@ async def recv_fw_hash(client, topic, data, retained):
             return
         except OSError as e:
             print_exception(e)
+            status.app_state = status.APP_ERROR
     else:
         print(f"ota.recv_fw_hash: Hash invalid! " +
               f"actual (SHA256:{hexlify(fw_hash).decode()}) != expected (SHA256:{hexlify(data).decode()})")
@@ -142,6 +143,7 @@ async def recv_app_hash(client, topic, data, retained):
             return
         except OSError as e:
             print_exception(e)
+            status.app_state = status.APP_ERROR
     else:
         print(f"ota.recv_app_hash: Hash invalid! " +
               f"actual ({hexlify(app_hash).decode()}) != expected ({hexlify(data).decode()})")

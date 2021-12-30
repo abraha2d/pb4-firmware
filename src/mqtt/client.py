@@ -5,7 +5,16 @@ from socket import getaddrinfo
 from time import time
 
 # noinspection PyUnresolvedReferences
-from uasyncio import Event, Lock, core, create_task, open_connection, sleep_ms
+from uasyncio import (
+    Event,
+    Lock,
+    core,
+    create_task,
+    current_task,
+    get_event_loop,
+    open_connection,
+    sleep_ms,
+)
 
 from .constants import (
     PROTOCOL,
@@ -201,7 +210,15 @@ class MQTTClient:
                 print(f"mqtt.send_puback: DEBUG {topic}")
 
             cb = self.callbacks.get(topic, self.default_callback)
-            await cb(self, topic, data, retained)
+            try:
+                await cb(self, topic, data, retained)
+            except Exception as e:
+                print(f"mqtt.send_puback: Error during callback: {e}")
+                get_event_loop().call_exception_handler({
+                    "message": "mqtt.send_puback: Error during callback!",
+                    "future": current_task(),
+                    "exception": e
+                })
 
     async def send_subscribe(self, topics, sub_type):
         await self.connected.wait()
@@ -432,7 +449,7 @@ class MQTTClient:
                     except EOFError:
                         continue
                     except OSError as e:
-                        if e.errno == ECONNRESET:
+                        if e.errno in errnos:
                             continue
                         raise
                 else:

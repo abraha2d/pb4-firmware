@@ -1,8 +1,10 @@
+from io import StringIO
 from os import uname
 
 # noinspection PyUnresolvedReferences
 from esp32 import Partition
 from machine import reset
+from sys import print_exception
 from uasyncio import create_task, get_event_loop, run, sleep_ms
 
 from captive_portal.dns.server import DNSServer
@@ -65,7 +67,12 @@ def do_reset():
 
 def exc_handler(loop, context):
     status.app_state = status.APP_ERROR
+
+    sio = StringIO()
+    print_exception(context["exception"], sio)
+    traceback = sio.getvalue()
     # TODO: Send error with traceback to MQTT
+
     return loop.default_exception_handler(loop, context)
 
 

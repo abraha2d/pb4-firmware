@@ -1,3 +1,4 @@
+# noinspection PyUnresolvedReferences
 from webrepl import accept_conn, setup_conn
 
 NAME = "WebREPL"

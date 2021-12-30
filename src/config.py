@@ -3,6 +3,7 @@ from utils import get_device_mac
 
 MQTT_SERVER = "pb4_control.local"
 MQTT_DEVICE_BASE = f"/pb4/devices/{get_device_mac()}"
+MQTT_APPS_BASE = f"{MQTT_DEVICE_BASE}/apps"
 
 MQTT_TOPIC_STATUS = f"{MQTT_DEVICE_BASE}/status"
 MQTT_TOPIC_VERSION = f"{MQTT_DEVICE_BASE}/version"
