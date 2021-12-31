@@ -349,10 +349,26 @@ class MQTTClient:
 
         topic, data = decode_str(data)
 
-        if header.qos != 0:
+        if header.qos > 0:
             packet_id, data = decode_int(data)
             self.inbound_wait.append((packet_id, time(), topic, data, header.retain == 1))
             await self.send_puback(packet_id, TYPE_PUBACK if header.qos == 1 else TYPE_PUBREC)
+        else:
+            try:
+                topic = topic.decode()
+            except UnicodeError:
+                print(f"mqtt.recv_publish: UnicodeError when trying to decode topic")
+                print(f"mqtt.recv_publish: DEBUG {topic}")
+
+            cb = self.callbacks.get(topic, self.default_callback)
+            try:
+                await cb(self, topic, data, header.retain == 1)
+            except Exception as e:
+                get_event_loop().call_exception_handler({
+                    "message": "mqtt.recv_publish: Error during callback!",
+                    "future": current_task(),
+                    "exception": e
+                })
 
     async def recv_puback(self, header):
         reader, writer = await self.get_sock()
