@@ -213,7 +213,6 @@ class MQTTClient:
             try:
                 await cb(self, topic, data, retained)
             except Exception as e:
-                print(f"mqtt.send_puback: Error during callback: {e}")
                 get_event_loop().call_exception_handler({
                     "message": "mqtt.send_puback: Error during callback!",
                     "future": current_task(),

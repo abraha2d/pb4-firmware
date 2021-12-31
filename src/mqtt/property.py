@@ -2,16 +2,28 @@ from uasyncio import create_task
 
 
 class MqttProp:
-    def __init__(self, client, topic, default=None, qos=2, retain=True, readonly=False):
+    def __init__(
+            self,
+            client,
+            topic,
+            default=None,
+            qos=2,
+            retain=True,
+            readonly=False,
+            writeonly=False,
+    ):
         self.client = client
         self.topic = topic
         self.df = default
         self.qos = qos
         self.retain = retain
         self.readonly = readonly
+        self.writeonly = writeonly
 
         self.data = None
-        create_task(self.client.subscribe((self.topic, self.qos, self.recv_data), ))
+        if not self.writeonly:
+            print(f"mqtt.property: {self.topic} -> ?")
+            create_task(self.client.subscribe((self.topic, self.qos, self.recv_data)))
 
     @staticmethod
     def default():
@@ -27,18 +39,22 @@ class MqttProp:
 
     # noinspection PyUnusedLocal
     async def recv_data(self, client, topic, data, retained):
-        print(f"mqtt.property: {self.topic} -> ", end="")
-        self.data = self.ntohd(data)
-        print(self.data)
+        if self.writeonly:
+            print(f"mqtt.property: WARNING: Ignoring update to a write-only property: {self.topic}")
+        else:
+            print(f"mqtt.property: {self.topic} -> ", end="")
+            self.data = self.ntohd(data)
+            print(self.data)
 
     def get(self):
         default = self.default() if self.df is None else self.df
         return default if self.data is None else self.data
 
     def set(self, data):
-        if not (self.readonly or self.data == data):
+        if self.readonly:
+            print(f"mqtt.property: WARNING: Ignoring update to a read-only property: {self.topic}")
+        elif self.data != data:
             self.data = data
-            print(f"mqtt.property: {self.data} -> {self.topic}")
             create_task(self.client.publish(self.topic, self.htond(data), self.qos, self.retain, ))
 
 

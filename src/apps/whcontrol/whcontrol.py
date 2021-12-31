@@ -58,35 +58,35 @@ async def main(mqtt_client):
     ds = DS18X20(OneWire(touch_1_pin))
 
     # Static configuration
-    sensor_id_top = MqttProp(mqtt_client, MQTT_TOPIC_SENSOR_ID_TOP, b"28ff8821a2170546")
-    sensor_id_bottom = MqttProp(mqtt_client, MQTT_TOPIC_SENSOR_ID_BOTTOM, b"28ffab16a217053e")
+    sensor_id_top = MqttProp(mqtt_client, MQTT_TOPIC_SENSOR_ID_TOP, readonly=True)
+    sensor_id_bottom = MqttProp(mqtt_client, MQTT_TOPIC_SENSOR_ID_BOTTOM, readonly=True)
 
     # Dynamic configuration
-    heat_cutoff_condensation = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_CONDENSATION, 100)
-    heat_cutoff_safety = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_SAFETY, 140)
-    heat_max_runtime = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_MAX_RUNTIME, 900)
-    heat_override = MqttBoolProp(mqtt_client, MQTT_TOPIC_HEAT_OVERRIDE, False)
-    heat_setpoint = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_SETPOINT, 120)
+    heat_cutoff_condensation = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_CONDENSATION, 100, readonly=True)
+    heat_cutoff_safety = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_SAFETY, 140, readonly=True)
+    heat_max_runtime = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_MAX_RUNTIME, 900, readonly=True)
+    heat_override = MqttBoolProp(mqtt_client, MQTT_TOPIC_HEAT_OVERRIDE, False, readonly=True)
+    heat_setpoint = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_SETPOINT, 120, readonly=True)
 
-    igniter_check_delay = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_CHECK_DELAY, 120)
-    igniter_check_threshold = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_CHECK_THRESHOLD, 110)
-    igniter_cooloff_delay = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_COOLOFF_DELAY, 10)
+    igniter_check_delay = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_CHECK_DELAY, 120, readonly=True)
+    igniter_check_threshold = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_CHECK_THRESHOLD, 110, readonly=True)
+    igniter_cooloff_delay = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_COOLOFF_DELAY, 10, readonly=True)
 
     # Local state
     heat_start = None
     igniter_good = False
 
     # Alerts
-    missing_sensor_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_MISSING_SENSOR, readonly=True)
-    condensation_cutoff_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_CONDENSATION_CUTOFF, readonly=True)
-    safety_cutoff_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_SAFETY_CUTOFF, readonly=True)
-    max_runtime_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_MAX_RUNTIME, readonly=True)
-    igniter_check_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_IGNITER_CHECK, readonly=True)
+    missing_sensor_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_MISSING_SENSOR, writeonly=True)
+    condensation_cutoff_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_CONDENSATION_CUTOFF, writeonly=True)
+    safety_cutoff_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_SAFETY_CUTOFF, writeonly=True)
+    max_runtime_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_MAX_RUNTIME, writeonly=True)
+    igniter_check_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_IGNITER_CHECK, writeonly=True)
 
     # Output
-    heat_on = MqttBoolProp(mqtt_client, MQTT_TOPIC_OUTPUT_HEAT_ON, readonly=True)
-    temp_top = MqttFloatProp(mqtt_client, MQTT_TOPIC_OUTPUT_TEMP_TOP, readonly=True)
-    temp_bottom = MqttFloatProp(mqtt_client, MQTT_TOPIC_OUTPUT_TEMP_BOTTOM, readonly=True)
+    heat_on = MqttBoolProp(mqtt_client, MQTT_TOPIC_OUTPUT_HEAT_ON, writeonly=True)
+    temp_top = MqttFloatProp(mqtt_client, MQTT_TOPIC_OUTPUT_TEMP_TOP, writeonly=True)
+    temp_bottom = MqttFloatProp(mqtt_client, MQTT_TOPIC_OUTPUT_TEMP_BOTTOM, writeonly=True)
 
     def start_heat():
         nonlocal heat_start
@@ -112,7 +112,10 @@ async def main(mqtt_client):
         max_runtime_alert.set(False)
 
         await sleep_ms(250)
-        ds.convert_temp()
+        try:
+            ds.convert_temp()
+        except onewire.OneWireError:
+            continue
         await sleep_ms(750)
 
         temps = {}
@@ -129,7 +132,7 @@ async def main(mqtt_client):
             temp_bottom.set(temps[sensor_id_bottom.get()])
             print(f"Bottom: {temp_bottom.get()}")
         except KeyError as e:
-            print(f"apps.whcontrol.main: Missing configured temperature sensor: {e}")
+            # print(f"apps.whcontrol.main: Missing configured temperature sensor: {e}")
             missing_sensor_alert.set(True)
             continue
         missing_sensor_alert.set(False)
