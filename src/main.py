@@ -133,6 +133,7 @@ async def main():
         ]
     else:
         # TODO: get config from MQTT
+        app_config.append("watchdog")
         app_config.append("webrepl")
 
         if get_device_mac() == "dbd4c4":
