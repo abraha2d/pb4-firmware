@@ -1,3 +1,4 @@
+from errno import ECONNABORTED
 from io import StringIO
 # noinspection PyUnresolvedReferences
 from sys import print_exception
@@ -19,7 +20,6 @@ class HTTPServer:
         await server.wait_closed()
 
     async def callback(self, reader, writer):
-
         try:
             request = bytearray()
             try:
@@ -55,10 +55,15 @@ class HTTPServer:
                 data = str(data)
             data = data.encode("ISO-8859-1")
 
-        writer.write(response.encode("ISO-8859-1") + data)
-        await writer.drain()
-        writer.close()
-        await writer.wait_closed()
+        try:
+            writer.write(response.encode("ISO-8859-1") + data)
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+        except OSError as e:
+            if e.errno in [ECONNABORTED]:
+                pass
+            raise
 
     async def get_response(self, request_lines):
         method, uri, _ = request_lines[0].split(" ")
