@@ -13,6 +13,7 @@ from mqtt.client import MQTTClient
 
 from config import (
     MQTT_SERVER,
+    MQTT_TOPIC_ERRORS,
     MQTT_TOPIC_STATUS,
     MQTT_TOPIC_VERSION,
     erase_wlan_config,
@@ -22,6 +23,8 @@ from ota import setup_ota_subscriptions
 from upy_platform import boot, status, version, wlan_ap, wlan_sta
 from utils import get_device_mac, get_device_name, connect_wlan, wlan_is_connected
 from views import urlconf
+
+mqtt_client = None
 
 
 async def do_setup():
@@ -68,15 +71,18 @@ def do_reset():
 def exc_handler(loop, context):
     status.app_state = status.APP_ERROR
 
-    sio = StringIO()
-    print_exception(context["exception"], sio)
-    traceback = sio.getvalue()
-    # TODO: Send error with traceback to MQTT
+    if mqtt_client is not None:
+        sio = StringIO()
+        print_exception(context["exception"], sio)
+        traceback = sio.getvalue()
+        create_task(mqtt_client.publish(MQTT_TOPIC_ERRORS, traceback, qos=2, retain=True))
 
     return loop.default_exception_handler(loop, context)
 
 
 async def main():
+    global mqtt_client
+
     part_label = Partition(Partition.RUNNING).info()[4]
     print(f"main.main: Booted MicroPython from '{part_label}'.")
     print("main.main: Hold BOOT within the next second to factory reset...")
@@ -96,7 +102,6 @@ async def main():
 
     if version == 2:
         print("main.main: PottyBox 2.0 has Wi-Fi issues. Not starting network-connected features...")
-        mqtt_client = None
     else:
         await do_connect()
 

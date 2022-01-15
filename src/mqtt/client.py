@@ -1,6 +1,6 @@
 import gc
 from binascii import hexlify
-from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH
+from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOTCONN
 from socket import getaddrinfo
 from time import time
 
@@ -51,7 +51,7 @@ from .utils import (
     decode_str,
 )
 
-errnos = [ECONNABORTED, ECONNRESET, EHOSTUNREACH]
+errnos = [ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOTCONN]
 
 
 class MQTTClient:
