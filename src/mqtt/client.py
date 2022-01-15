@@ -60,6 +60,7 @@ class MQTTClient:
             server: str,
             client_id: str,
             lwt=None,
+            bc=None,
             username=None,
             password=None,
             keepalive=0,
@@ -68,6 +69,7 @@ class MQTTClient:
         self.client_id = client_id
         self.clean_session = True
         self.lwt = lwt
+        self.bc = bc
         self.username = username
         self.password = password
         self.keepalive = keepalive
@@ -325,6 +327,7 @@ class MQTTClient:
             await self.connect()
         else:
             self.connected.set()
+            await self.publish(*self.bc)
 
     @staticmethod
     async def bulk_read(reader, n):

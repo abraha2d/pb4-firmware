@@ -113,14 +113,12 @@ async def main():
             server=MQTT_SERVER,
             client_id=get_device_mac(),
             lwt=status_offline,
+            bc=status_online,
             keepalive=10,
         )
 
         mqtt_task = create_task(mqtt_client.run())
-
-        await mqtt_client.publish(*status_online)
         await mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
-
         await setup_ota_subscriptions(mqtt_client)
 
     status.app_state = status.APP_IDLE
