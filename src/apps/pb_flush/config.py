@@ -1,0 +1,9 @@
+from config import MQTT_APPS_BASE
+
+CAL_ALPHA = 0.001
+LOOP_TIME = 50
+THRESHOLD = 0.666
+
+MQTT_POTTYBOX_BASE = f"{MQTT_APPS_BASE}/pottybox"
+MQTT_TOPIC_DUAL_POTTY = f"{MQTT_POTTYBOX_BASE}/config/dual_potty"
+MQTT_TOPIC_FLUSH_TIME = f"{MQTT_POTTYBOX_BASE}/config/flush_time"

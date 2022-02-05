@@ -140,7 +140,7 @@ async def main():
         app_config.append("webrepl")
 
         if get_device_mac() == "dbd4c4":
-            app_config.append("whcontrol")
+            app_config.append("pb_flush")
 
     for app_id in app_config:
         try:
