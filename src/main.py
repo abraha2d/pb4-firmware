@@ -150,6 +150,8 @@ async def main():
             app_task = create_task(app.main(mqtt_client))
         except ImportError:
             print(f"main.main: Skipping unknown app ID '{app_id}'...")
+        except AttributeError:
+            print(f"main.main: Skipping broken app '{app_id}'")
 
     print("main.main: Starting event loop...")
     loop = get_event_loop()

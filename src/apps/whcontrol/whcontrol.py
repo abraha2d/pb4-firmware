@@ -30,8 +30,6 @@ from .config import (
     MQTT_TOPIC_SENSOR_ID_BOTTOM,
 )
 
-NAME = "WHControl"
-
 
 class OneWire(onewire.OneWire):
 
