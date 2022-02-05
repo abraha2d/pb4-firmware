@@ -1,6 +1,6 @@
 import gc
 from binascii import hexlify
-from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOTCONN
+from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN
 from socket import getaddrinfo
 from time import time
 
@@ -51,7 +51,7 @@ from .utils import (
     decode_str,
 )
 
-errnos = [ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOTCONN]
+errnos = [ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN]
 
 
 class MQTTClient:
@@ -102,9 +102,16 @@ class MQTTClient:
     async def get_sock(self):
         if self.sock is None:
             self.connected.clear()
-            # workaround for https://github.com/micropython/micropython/issues/8038
-            ai = getaddrinfo(self.server, 1883)[0][-1]  # TODO: remove once fixed upstream
-            self.sock = await open_connection(*ai)
+            while True:
+                try:
+                    # workaround for https://github.com/micropython/micropython/issues/8038
+                    ai = getaddrinfo(self.server, 1883)[0][-1]  # TODO: remove once fixed upstream
+                    self.sock = await open_connection(*ai)
+                    break
+                except OSError as e:
+                    if e.errno in errnos:
+                        continue
+                    raise
         return self.sock
 
     async def wait_retry(self):
