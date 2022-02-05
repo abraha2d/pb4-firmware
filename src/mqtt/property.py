@@ -22,6 +22,7 @@ class MqttProp:
 
         self.data = None
         if not self.writeonly:
+            # TODO: Handle multiple properties on same topic
             print(f"mqtt.property: {self.topic} -> ?")
             create_task(self.client.subscribe((self.topic, self.qos, self.recv_data)))
 

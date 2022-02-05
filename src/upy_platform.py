@@ -28,11 +28,11 @@ nvs = NVS("pb4")
 
 s1_led = Signal(2, Pin.OUT, value=0) if version == 4 else FakeSignal()
 s1_int = Signal(4, Pin.IN, pull=Pin.PULL_UP) if version == 4 else FakeSignal()
-s1_shut = Signal(5, Pin.OUT, value=1, invert=True) if version == 4 else FakeSignal()
+s1_en = Signal(5, Pin.OUT, value=1, invert=True) if version == 4 else FakeSignal()
 
 s2_led = Signal(18, Pin.OUT, value=0) if version == 4 else FakeSignal()
 s2_int = Signal(19, Pin.IN, pull=Pin.PULL_UP) if version == 4 else FakeSignal()
-s2_shut = Signal(23, Pin.OUT, value=1, invert=True) if version == 4 else FakeSignal()
+s2_en = Signal(23, Pin.OUT, value=1, invert=True) if version == 4 else FakeSignal()
 
 touch_1_pin = Pin(32)
 touch_2_pin = Pin(33)

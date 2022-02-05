@@ -47,7 +47,7 @@ async def main(mqtt_client):
             flush_start[idx] = None
 
         flush_sig[idx].value(flush_val)
-        print(f"Touch {idx}: {touch_val}\tavg: {touch_avg[idx]:.3f}\tpress: {pressed}\tflush: {flush_val}")
+        print(f"pb_flush.main: Touch {idx}: {touch_val}\tavg: {touch_avg[idx]:.3f}\tpress: {pressed}\tflush: {flush_val}")  # TODO: remove
 
     while True:
         process_touch(0)
