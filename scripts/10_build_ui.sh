@@ -4,6 +4,7 @@ set -e
 set -o pipefail
 
 cd ui
+yarn
 
 VERSION_FILE=$(yarn --silent build_path)/VERSION
 if [ -f "$VERSION_FILE" ]; then
