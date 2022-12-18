@@ -1,9 +1,10 @@
 set(SDKCONFIG_DEFAULTS
     boards/sdkconfig.base
-    boards/sdkconfig.ble
     boards/sdkconfig.240mhz
     boards/sdkconfig.spiram
-    boards/POTTYBOX_4/sdkconfig.board
+    boards/sdkconfig.ble
+    boards/sdkconfig.nimble_core1
+    boards/PB4/sdkconfig.board
 )
 
 if(NOT MICROPY_FROZEN_MANIFEST)

@@ -1,5 +1,5 @@
 import React, { ComponentType } from "react";
-import { Props as IconProps, Wifi, Wifi1, Wifi2 } from "react-bootstrap-icons";
+import { IconProps, Wifi, Wifi1, Wifi2 } from "react-bootstrap-icons";
 
 type RssiIconProps = {
   rssi: number;

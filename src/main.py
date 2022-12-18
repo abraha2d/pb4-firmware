@@ -101,7 +101,7 @@ async def main():
         reset()
 
     if version == 2:
-        print("main.main: PottyBox 2.0 has Wi-Fi issues. Not starting network-connected features...")
+        print("main.main: PB 2.0 has Wi-Fi issues. Not starting network-connected features...")
     else:
         await do_connect()
 
@@ -140,6 +140,7 @@ async def main():
         app_config.append("webrepl")
 
         if get_device_mac() == "dbd4c4":
+            app_config.append("pb_exhaust")
             app_config.append("pb_flush")
 
     for app_id in app_config:

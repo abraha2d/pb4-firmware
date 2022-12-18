@@ -51,7 +51,7 @@ async def init_sensor():
     while True:
         await sleep_ms(1)
         d = i2c.readfrom_mem(I2C_ADDR, VL53L1_FIRMWARE__SYSTEM_STATUS, 1)
-        if d & 0x01:
+        if d[0] & 0x01:
             break
 
     # Sensor init

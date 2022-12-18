@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-export BOARD="${BOARD:-POTTYBOX_4}"
+export BOARD="${BOARD:-PB4}"
 FW_SRC="${FW_SRC:?required!}"
 
 cp -a config/* "$FW_SRC"

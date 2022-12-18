@@ -15,7 +15,7 @@
       <excludeFolder url="file://$MODULE_DIR$/staging" />
       <excludeFolder url="file://$MODULE_DIR$/uasyncio" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="Python 3.10 (idf4.4_py3.10_env)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="MicroPython" level="project" />
   </component>

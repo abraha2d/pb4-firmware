@@ -1,2 +1,2 @@
 from .pb_exhaust import main
-NAME = "PottyBox Exhause"
+NAME = "PottyBox Exhaust"
