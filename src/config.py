@@ -50,3 +50,20 @@ def erase_wlan_config():
             print("config.erase_wlan_config: NVS not found.")
             return
         raise
+
+
+def get_vfs_config():
+    try:
+        vfs_config = nvs.get_i32("vfs_config")
+        return "app_1" if vfs_config else "app_0"
+    except OSError:
+        return "vfs"
+
+
+def set_vfs_config(vfs_config):
+    nvs.set_i32("vfs_config", vfs_config == "app_1")
+    nvs.commit()
+
+
+def erase_vfs_config():
+    nvs.erase_key("vfs_config")

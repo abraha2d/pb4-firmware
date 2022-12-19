@@ -15,6 +15,8 @@ from config import (
     MQTT_TOPIC_OTA_APP_DATA,
     MQTT_TOPIC_OTA_APP_HASH,
     MQTT_TOPIC_OTA_APP_OK,
+    get_vfs_config,
+    set_vfs_config,
 )
 from upy_platform import status
 
@@ -78,10 +80,12 @@ async def recv_hash(client, data, retained, to_update, ok_topic, use_ota=False):
                 else:
                     to_update.writeblocks(i, ota_chunk)
 
+            print(f"ota.recv_hash: Success. Choosing '{part_label}' for next boot...")
             if use_ota:
                 to_update.ota_end(handle)
-                print(f"ota.recv_hash: Success. Choosing '{part_label}' for next boot...")
                 to_update.set_boot()
+            else:
+                set_vfs_config(part_label)
 
             print(f"ota.recv_hash: Done. Communicating status to broker...")
             await client.publish(ok_topic, "1", 1)
@@ -113,6 +117,6 @@ async def recv_fw_hash(client, topic, data, retained):
 
 async def recv_app_hash(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_APP_HASH
-    to_update = Partition.find(Partition.TYPE_DATA, label='staging')[0]
+    to_update = Partition.find(Partition.TYPE_DATA, label="app_1" if get_vfs_config() == "app_0" else "app_0")[0]
     ok_topic = MQTT_TOPIC_OTA_APP_OK
-    await recv_hash(client, data, retained, to_update, ok_topic, use_ota=True)
+    await recv_hash(client, data, retained, to_update, ok_topic)

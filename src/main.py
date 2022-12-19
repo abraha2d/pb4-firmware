@@ -16,6 +16,7 @@ from config import (
     MQTT_TOPIC_ERRORS,
     MQTT_TOPIC_STATUS,
     MQTT_TOPIC_VERSION,
+    erase_vfs_config,
     erase_wlan_config,
     get_wlan_config,
 )
@@ -65,6 +66,7 @@ async def do_connect():
 
 
 def do_reset():
+    erase_vfs_config()
     erase_wlan_config()
 
 
@@ -83,8 +85,6 @@ def exc_handler(loop, context):
 async def main():
     global mqtt_client
 
-    part_label = Partition(Partition.RUNNING).info()[4]
-    print(f"main.main: Booted MicroPython from '{part_label}'.")
     print("main.main: Hold BOOT within the next second to factory reset...")
     status.app_state = status.APP_BOOTING
 
