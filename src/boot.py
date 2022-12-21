@@ -15,8 +15,11 @@ def main():
 
     nvs = NVS("pb4")
 
-    part_label = Partition(Partition.RUNNING).info()[4]
-    print(f"boot.main: Booted MicroPython from '{part_label}'.")
+    p = Partition(Partition.RUNNING).info()[4]
+    u = os.uname()
+
+    print(f"boot.main: Booted MicroPython from '{p}'.")
+    print(f"boot.main: {u.version}; {u.machine}")
 
     try:
         vfs_config = nvs.get_i32("vfs_config")
@@ -46,6 +49,13 @@ def main():
                 print(f"boot.main: Falling back to '{vfs_fallback}'...")
             vfs_label = vfs_fallback
             continue
+
+        try:
+            from version import NAME, VERSION
+            print(f"boot.main: Loaded {NAME} v{VERSION}.")
+        except ImportError as e:
+            print(f"boot.main: {e}")
+            print("boot.main: Loaded unidentified app.")
 
         return
 
