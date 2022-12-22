@@ -5,7 +5,7 @@ MPY_DIR = ../micropython
 MOD = vl53l1x
 
 # Source files (.c or .py)
-SRC = vl53l1x.c VL53L1X_api.c vl53l1_platform.c
+SRC = vl53l1x.c VL53L1X_api.c vl53l1_platform.c vl53l1x.py
 
 # Architecture to build for (x86, x64, armv6m, armv7m, xtensa, xtensawin)
 ARCH = xtensawin
