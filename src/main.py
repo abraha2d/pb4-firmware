@@ -20,6 +20,7 @@ from config import (
     erase_wlan_config,
     get_wlan_config,
 )
+from drivers import DRIVER_LIST, handle_i2c
 from ota import setup_ota_subscriptions
 from upy_platform import boot, status, version, wlan_ap, wlan_sta
 from utils import get_device_mac, get_device_name, connect_wlan, wlan_is_connected
@@ -77,7 +78,14 @@ def exc_handler(loop, context):
         sio = StringIO()
         print_exception(context["exception"], sio)
         traceback = sio.getvalue()
-        create_task(mqtt_client.publish(MQTT_TOPIC_ERRORS, traceback, qos=2, retain=True))
+        create_task(
+            mqtt_client.publish(
+                MQTT_TOPIC_ERRORS,
+                traceback,
+                qos=2,
+                retain=True,
+            )
+        )
 
     return loop.default_exception_handler(loop, context)
 
@@ -101,7 +109,10 @@ async def main():
         reset()
 
     if version == 2:
-        print("main.main: PB 2.0 has Wi-Fi issues. Not starting network-connected features...")
+        print(
+            "main.main: PB 2.0 has Wi-Fi issues. "
+            + "Not starting network-connected features..."
+        )
     else:
         await do_connect()
 
@@ -127,21 +138,36 @@ async def main():
     if Partition(Partition.RUNNING).info()[4] != "factory":
         Partition.mark_app_valid_cancel_rollback()
 
+    driver_config = []
     app_config = []
 
     if version == 2:
         print("main.main: Note: MQTT not available, using hardcoded configuration.")
-        app_config = [
-            "whcontrol",
-        ]
+        app_config.append("whcontrol")
     else:
         # TODO: get config from MQTT
         app_config.append("watchdog")
         app_config.append("webrepl")
 
         if get_device_mac() == "dbd4c4":
+            driver_config.append("vl53l1x")
             app_config.append("pb_exhaust")
             app_config.append("pb_flush")
+
+    for driver_id in driver_config:
+        try:
+            driver = getattr(__import__(f"drivers.{driver_id}"), driver_id)
+            driver_name = getattr(driver, "NAME", driver_id)
+            print(f"main.main: Registering driver '{driver_name}'...")
+            driver.register()
+        except ImportError:
+            print(f"main.main: Skipping unknown driver ID '{driver_id}'...")
+        except AttributeError:
+            print(f"main.main: Skipping broken driver '{driver_id}'")
+
+    if DRIVER_LIST:
+        print(f"main.main: Starting I2C handler...")
+        driver_task = create_task(handle_i2c())
 
     for app_id in app_config:
         try:
@@ -160,5 +186,5 @@ async def main():
     loop.run_forever()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run(main())
