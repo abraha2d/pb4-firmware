@@ -26,7 +26,7 @@ def readfrom_mem(addr, memaddr, nbytes, *, addrsize=8):
     try:
         return i2c.readfrom_mem(addr, memaddr, nbytes, addrsize=addrsize)
     except OSError:
-        print(f"drivers.readfrom_mem: Lost {addr}")
+        print(f"drivers.readfrom_mem: Lost 0x{addr:02x}")
         remove_addrs({addr})
         raise
 
@@ -35,7 +35,7 @@ def writeto_mem(addr, memaddr, buf, *, addrsize=8):
     try:
         return i2c.writeto_mem(addr, memaddr, buf, addrsize=addrsize)
     except OSError:
-        print(f"drivers.writeto_mem: Lost {addr}")
+        print(f"drivers.writeto_mem: Lost 0x{addr:02x}")
         remove_addrs({addr})
         raise
 
@@ -48,7 +48,8 @@ async def handle_i2c():
 
         # Remove devices that aren't connected anymore
         if devices - scan:
-            print(f"drivers.handle_i2c: Lost {devices - scan}")
+            lost_devices = ", ".join(f"0x{d:02x}" for d in (devices - scan))
+            print(f"drivers.handle_i2c: Lost {lost_devices}")
             remove_addrs(devices - scan)
 
         for sX_devices, sX_en, sX_bus in [
@@ -60,7 +61,7 @@ async def handle_i2c():
                 if sX_en is not None:
                     # Enable sensor X power to check for new connections
                     sX_en.on()
-                    await sleep_ms(10)
+                    await sleep_ms(1)
                     sX_scan = set(i2c.scan()) - scan
                 else:
                     sX_scan = scan
