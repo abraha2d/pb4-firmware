@@ -27,7 +27,14 @@ def get_wlan_config():
         wlan_pass = bytearray(wlan_pass_len)
         assert nvs.get_blob("wlan_pass", wlan_pass) == wlan_pass_len
         return wlan_ssid.decode(), wlan_pass.decode()
-    except (OSError, AssertionError):
+    except OSError as e:
+        if e.errno == -4354:  # ESP_ERR_NVS_NOT_FOUND
+            print("config.get_wlan_config: NVS not found.")
+            return None
+        raise
+    except AssertionError:
+        print("config.get_wlan_config: Malformed configuration, erasing...")
+        erase_wlan_config()
         return None
 
 
@@ -56,8 +63,11 @@ def get_vfs_config():
     try:
         vfs_config = nvs.get_i32("vfs_config")
         return "app_1" if vfs_config else "app_0"
-    except OSError:
-        return "vfs"
+    except OSError as e:
+        if e.errno == -4354:  # ESP_ERR_NVS_NOT_FOUND
+            print("config.get_vfs_config: NVS not found.")
+            return "vfs"
+        raise
 
 
 def set_vfs_config(vfs_config):
@@ -66,4 +76,10 @@ def set_vfs_config(vfs_config):
 
 
 def erase_vfs_config():
-    nvs.erase_key("vfs_config")
+    try:
+        nvs.erase_key("vfs_config")
+    except OSError as e:
+        if e.errno == -4354:  # ESP_ERR_NVS_NOT_FOUND
+            print("config.erase_vfs_config: NVS not found.")
+            return
+        raise

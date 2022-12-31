@@ -3,6 +3,7 @@ from time import time
 
 # noinspection PyUnresolvedReferences
 import ds18x20
+
 # noinspection PyUnresolvedReferences
 import onewire
 from uasyncio import sleep_ms, sleep
@@ -32,7 +33,6 @@ from .config import (
 
 
 class OneWire(onewire.OneWire):
-
     def pullup(self, strong=False):
         if strong:
             self.pin.init(self.pin.OUT, value=1)
@@ -60,31 +60,59 @@ async def main(mqtt_client):
     sensor_id_bottom = MqttProp(mqtt_client, MQTT_TOPIC_SENSOR_ID_BOTTOM, readonly=True)
 
     # Dynamic configuration
-    heat_cutoff_condensation = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_CONDENSATION, 100, readonly=True)
-    heat_cutoff_safety = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_SAFETY, 140, readonly=True)
-    heat_max_runtime = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_MAX_RUNTIME, 900, readonly=True)
-    heat_override = MqttBoolProp(mqtt_client, MQTT_TOPIC_HEAT_OVERRIDE, False, readonly=True)
-    heat_setpoint = MqttIntProp(mqtt_client, MQTT_TOPIC_HEAT_SETPOINT, 120, readonly=True)
+    heat_cutoff_condensation = MqttIntProp(
+        mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_CONDENSATION, 100, readonly=True
+    )
+    heat_cutoff_safety = MqttIntProp(
+        mqtt_client, MQTT_TOPIC_HEAT_CUTOFF_SAFETY, 140, readonly=True
+    )
+    heat_max_runtime = MqttIntProp(
+        mqtt_client, MQTT_TOPIC_HEAT_MAX_RUNTIME, 900, readonly=True
+    )
+    heat_override = MqttBoolProp(
+        mqtt_client, MQTT_TOPIC_HEAT_OVERRIDE, False, readonly=True
+    )
+    heat_setpoint = MqttIntProp(
+        mqtt_client, MQTT_TOPIC_HEAT_SETPOINT, 120, readonly=True
+    )
 
-    igniter_check_delay = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_CHECK_DELAY, 120, readonly=True)
-    igniter_check_threshold = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_CHECK_THRESHOLD, 110, readonly=True)
-    igniter_cooloff_delay = MqttIntProp(mqtt_client, MQTT_TOPIC_IGNITER_COOLOFF_DELAY, 10, readonly=True)
+    igniter_check_delay = MqttIntProp(
+        mqtt_client, MQTT_TOPIC_IGNITER_CHECK_DELAY, 120, readonly=True
+    )
+    igniter_check_threshold = MqttIntProp(
+        mqtt_client, MQTT_TOPIC_IGNITER_CHECK_THRESHOLD, 110, readonly=True
+    )
+    igniter_cooloff_delay = MqttIntProp(
+        mqtt_client, MQTT_TOPIC_IGNITER_COOLOFF_DELAY, 10, readonly=True
+    )
 
     # Local state
     heat_start = None
     igniter_good = False
 
     # Alerts
-    missing_sensor_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_MISSING_SENSOR, writeonly=True)
-    condensation_cutoff_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_CONDENSATION_CUTOFF, writeonly=True)
-    safety_cutoff_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_SAFETY_CUTOFF, writeonly=True)
-    max_runtime_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_MAX_RUNTIME, writeonly=True)
-    igniter_check_alert = MqttBoolProp(mqtt_client, MQTT_TOPIC_ALERT_IGNITER_CHECK, writeonly=True)
+    missing_sensor_alert = MqttBoolProp(
+        mqtt_client, MQTT_TOPIC_ALERT_MISSING_SENSOR, writeonly=True
+    )
+    condensation_cutoff_alert = MqttBoolProp(
+        mqtt_client, MQTT_TOPIC_ALERT_CONDENSATION_CUTOFF, writeonly=True
+    )
+    safety_cutoff_alert = MqttBoolProp(
+        mqtt_client, MQTT_TOPIC_ALERT_SAFETY_CUTOFF, writeonly=True
+    )
+    max_runtime_alert = MqttBoolProp(
+        mqtt_client, MQTT_TOPIC_ALERT_MAX_RUNTIME, writeonly=True
+    )
+    igniter_check_alert = MqttBoolProp(
+        mqtt_client, MQTT_TOPIC_ALERT_IGNITER_CHECK, writeonly=True
+    )
 
     # Output
     heat_on = MqttBoolProp(mqtt_client, MQTT_TOPIC_OUTPUT_HEAT_ON, writeonly=True)
     temp_top = MqttFloatProp(mqtt_client, MQTT_TOPIC_OUTPUT_TEMP_TOP, writeonly=True)
-    temp_bottom = MqttFloatProp(mqtt_client, MQTT_TOPIC_OUTPUT_TEMP_BOTTOM, writeonly=True)
+    temp_bottom = MqttFloatProp(
+        mqtt_client, MQTT_TOPIC_OUTPUT_TEMP_BOTTOM, writeonly=True
+    )
 
     def start_heat():
         nonlocal heat_start
@@ -120,7 +148,7 @@ async def main(mqtt_client):
         for rom in sorted(ds.scan()):
             try:
                 temps[hexlify(rom)] = ds.read_temp(rom) * 9 / 5 + 32
-            except Exception:
+            except Exception:  # TODO: cast a smaller net
                 pass
 
         try:
@@ -145,11 +173,18 @@ async def main(mqtt_client):
         safety_cutoff_alert.set(False)
 
         # Check if igniter is working
-        if heat_start is not None and not igniter_good and time() - heat_start > igniter_check_delay.get():
+        if (
+            heat_start is not None
+            and not igniter_good
+            and time() - heat_start > igniter_check_delay.get()
+        ):
             if temp_top.get() > igniter_check_threshold.get():
                 igniter_good = True
             else:
-                print(f"apps.whcontrol.main: Warning: igniter failure detected, cooling off...")
+                print(
+                    f"apps.whcontrol.main: Warning: igniter failure detected,"
+                    + " cooling off..."
+                )
                 stop_heat()
                 igniter_check_alert.set(True)
                 await sleep(igniter_cooloff_delay.get())

@@ -22,7 +22,7 @@ OTA_HASH = None
 
 def progress():
     while True:
-        yield from '-\\|/'
+        yield from "-\\|/"
 
 
 PROGRESS = progress()
@@ -90,9 +90,13 @@ def main():
         raw_data = payload_file.read()
         print(f" done. {len(raw_data)} bytes.")
 
-        print(f"Extending to nearest {ceil(BLOCK_SIZE / 1024)}K block...", end="", flush=True)
+        print(
+            f"Extending to nearest {ceil(BLOCK_SIZE / 1024)}K block...",
+            end="",
+            flush=True,
+        )
         pad_length = ceil(len(raw_data) / BLOCK_SIZE) * BLOCK_SIZE
-        ota_data = raw_data.ljust(pad_length, b'\xFF')
+        ota_data = raw_data.ljust(pad_length, b"\xFF")
         print(f" done. {ceil(pad_length / 1024)}K bytes.")
 
         print("Hashing...", end="", flush=True)
@@ -101,9 +105,14 @@ def main():
         print(f"SHA256: {hexlify(OTA_HASH).decode()}")
 
         print("Chunking...", end="", flush=True)
-        OTA_CHUNKS = [ota_data[i:i + CHUNK_SIZE] for i in range(0, len(ota_data), CHUNK_SIZE)]
+        OTA_CHUNKS = [
+            ota_data[i : i + CHUNK_SIZE] for i in range(0, len(ota_data), CHUNK_SIZE)
+        ]
         print(" done.")
-        print(f"{len(OTA_CHUNKS)} chunks. Max chunk size: {ceil(CHUNK_SIZE / 1024)}K bytes.")
+        print(
+            f"{len(OTA_CHUNKS)} chunks. "
+            + f"Max chunk size: {ceil(CHUNK_SIZE / 1024)}K bytes."
+        )
 
     print("Connecting to MQTT broker...", end="", flush=True)
     client.connect("pb4_control.local", keepalive=1)

@@ -25,6 +25,7 @@ def get_answer(ip_address):
     an.RDLENGTH = 4
 
     # noinspection PyUnresolvedReferences
-    an.RDATA[:] = bytes(int(i) for i in ip_address.split("."))  # inet_pton doesn't seem to exist
+    an.RDATA[:] = bytes(int(i) for i in ip_address.split("."))
+    # inet_pton doesn't seem to exist
 
     return an_buf

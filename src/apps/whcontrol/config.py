@@ -1,5 +1,6 @@
 from config import MQTT_APPS_BASE
 
+# fmt: off
 MQTT_WHCONTROL_BASE = f"{MQTT_APPS_BASE}/whcontrol"
 
 MQTT_TOPIC_SENSOR_ID_TOP = f"{MQTT_WHCONTROL_BASE}/config/sensor_ids/top"
@@ -25,3 +26,4 @@ MQTT_TOPIC_ALERT_IGNITER_CHECK = f"{MQTT_WHCONTROL_BASE}/alerts/igniter_check"
 MQTT_TOPIC_OUTPUT_HEAT_ON = f"{MQTT_WHCONTROL_BASE}/output/heat_on"
 MQTT_TOPIC_OUTPUT_TEMP_TOP = f"{MQTT_WHCONTROL_BASE}/output/temp_top"
 MQTT_TOPIC_OUTPUT_TEMP_BOTTOM = f"{MQTT_WHCONTROL_BASE}/output/temp_bottom"
+# fmt: on

@@ -41,7 +41,9 @@ async def scan(path, query_dict, headers):
     wlan_sta.active(True)
     wlan_sta.disconnect()
     networks = wlan_sta.scan()
-    networks = [network[:1] + (hexlify(network[1], ":"),) + network[2:] for network in networks]
+    networks = [
+        network[:1] + (hexlify(network[1], ":"),) + network[2:] for network in networks
+    ]
     return 200, {}, dumps(networks)
 
 

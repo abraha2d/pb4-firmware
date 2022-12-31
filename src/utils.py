@@ -6,7 +6,7 @@ from upy_platform import status, wlan_sta
 
 
 def get_device_mac():
-    return hexlify(wlan_sta.config('mac'))[-6:].decode()
+    return hexlify(wlan_sta.config("mac"))[-6:].decode()
 
 
 def get_device_name():

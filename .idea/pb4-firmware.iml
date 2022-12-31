@@ -11,6 +11,7 @@
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/staging" />
+      <excludeFolder url="file://$MODULE_DIR$/fw" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.10 (idf4.4_py3.10_env)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

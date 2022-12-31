@@ -1,5 +1,6 @@
 from errno import ECONNABORTED
 from io import StringIO
+
 # noinspection PyUnresolvedReferences
 from sys import print_exception
 from time import time_ns
@@ -16,7 +17,7 @@ class HTTPServer:
         self.urlconf = urlconf
 
     async def serve(self):
-        server = await start_server(self.callback, '0.0.0.0', 80)
+        server = await start_server(self.callback, "0.0.0.0", 80)
         await server.wait_closed()
 
     async def callback(self, reader, writer):
@@ -61,24 +62,24 @@ class HTTPServer:
             writer.close()
             await writer.wait_closed()
         except OSError as e:
-            if e.errno in [ECONNABORTED]:
-                pass
-            raise
+            if e.errno not in [ECONNABORTED]:
+                raise
 
-    async def get_response(self, request_lines):
-        method, uri, _ = request_lines[0].split(" ")
+    async def get_response(self, req_lines):
+        method, uri, _ = req_lines[0].split(" ")
 
         if method != "GET":
             return 501, {}, ""
 
-        headers = dict(line.split(": ", 1) for line in request_lines[1:] if ": " in line)
+        headers = dict(line.split(": ", 1) for line in req_lines[1:] if ": " in line)
         if headers.get("Host", self.ip_addr) != self.ip_addr:
             return 303, {"Location": f"http://{self.ip_addr}"}, ""
 
         path, query = uri.split("?", 1) if "?" in uri else (uri, "")
         query_dict = dict(
             url_decode(qp) if "=" in qp else (url_decode(qp), True)
-            for qp in query.split("&") if qp != ""
+            for qp in query.split("&")
+            if qp != ""
         )
 
         path = path.rstrip("/")

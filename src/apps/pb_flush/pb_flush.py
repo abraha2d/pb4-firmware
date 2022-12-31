@@ -39,8 +39,8 @@ async def main(mqtt_client):
             flush_start[idx] = ticks_ms()
 
         flush_val = pressed or (
-                flush_start[idx] is not None and
-                ticks_diff(ticks_ms(), flush_start[idx]) < flush_time.get() * 1000
+            flush_start[idx] is not None
+            and ticks_diff(ticks_ms(), flush_start[idx]) < flush_time.get() * 1000
         )
 
         if not flush_val:

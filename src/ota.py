@@ -20,7 +20,7 @@ from config import (
 )
 from upy_platform import status
 
-STAGING = Partition.find(Partition.TYPE_DATA, label='staging')[0]
+STAGING = Partition.find(Partition.TYPE_DATA, label="staging")[0]
 BLOCK_SIZE = STAGING.ioctl(5, None)
 STAGING_OFFSET = 0
 
@@ -43,7 +43,10 @@ async def recv_data(client, topic, data, retained):
     STAGING.writeblocks(STAGING_OFFSET, data)
     STAGING_OFFSET += ceil(len(data) / BLOCK_SIZE)
 
-    print(f"ota.recv_data: Received {ceil(STAGING_OFFSET * BLOCK_SIZE / 1024)}K bytes (+{ceil(len(data) / 1024)}K).")
+    print(
+        f"ota.recv_data: Received {ceil(STAGING_OFFSET * BLOCK_SIZE / 1024)}K bytes"
+        + f" (+{ceil(len(data) / 1024)}K)."
+    )
     status.app_state = status.APP_UPGRADING
 
 
@@ -66,7 +69,7 @@ async def recv_hash(client, data, retained, to_update, ok_topic, use_ota=False):
 
         try:
             print(f"ota.recv_hash: Writing update to partition '{part_label}'...")
-            print(f"ota.recv_hash: INFO block size {BLOCK_SIZE} bytes => {STAGING_OFFSET} blocks")
+            print(f"ota.recv_hash: INFO {STAGING_OFFSET}*{BLOCK_SIZE} bytes")
 
             if use_ota:
                 handle = to_update.ota_begin(STAGING_OFFSET * BLOCK_SIZE)
@@ -96,11 +99,14 @@ async def recv_hash(client, data, retained, to_update, ok_topic, use_ota=False):
             status.write(status.BLACK)
             reset()
             return
-        except OSError as e:
+        except OSError as e:  # TODO: Cast a smaller net
             print_exception(e)
     else:
-        print(f"ota.recv_hash: Hash invalid! " +
-              f"actual (SHA256:{hexlify(ota_hash).decode()}) != expected (SHA256:{hexlify(data).decode()})")
+        print(
+            f"ota.recv_hash: Hash invalid! "
+            + f"actual (SHA256:{hexlify(ota_hash).decode()}) != "
+              +f"expected (SHA256:{hexlify(data).decode()})"
+        )
 
     print(f"ota.recv_hash: Communicating failure to broker...")
     await client.publish(ok_topic, "0", 1)
@@ -117,6 +123,9 @@ async def recv_fw_hash(client, topic, data, retained):
 
 async def recv_app_hash(client, topic, data, retained):
     assert topic == MQTT_TOPIC_OTA_APP_HASH
-    to_update = Partition.find(Partition.TYPE_DATA, label="app_1" if get_vfs_config() == "app_0" else "app_0")[0]
+    to_update = Partition.find(
+        Partition.TYPE_DATA,
+        label="app_1" if get_vfs_config() == "app_0" else "app_0",
+    )[0]
     ok_topic = MQTT_TOPIC_OTA_APP_OK
     await recv_hash(client, data, retained, to_update, ok_topic)

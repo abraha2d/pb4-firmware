@@ -1,3 +1,5 @@
+from errno import ENODEV
+
 from uasyncio import sleep_ms
 
 from drivers import BUS_S1
@@ -30,5 +32,8 @@ async def main(mqtt_client):
             while True:
                 d = await s1.get_distance()
                 print(f"pb_exhaust.main: Sensor 1 distance: {d}mm")
-        except OSError:
-            print(f"pb_exhaust.main: Sensor 1 disconnected.")
+        except OSError as e:
+            if e.errno == ENODEV:
+                print(f"pb_exhaust.main: Sensor 1 disconnected.")
+                continue
+            raise

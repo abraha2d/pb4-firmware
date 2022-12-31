@@ -3,14 +3,14 @@ from uasyncio import create_task
 
 class MqttProp:
     def __init__(
-            self,
-            client,
-            topic,
-            default=None,
-            qos=2,
-            retain=True,
-            readonly=False,
-            writeonly=False,
+        self,
+        client,
+        topic,
+        default=None,
+        qos=2,
+        retain=True,
+        readonly=False,
+        writeonly=False,
     ):
         self.client = client
         self.topic = topic
@@ -41,7 +41,10 @@ class MqttProp:
     # noinspection PyUnusedLocal
     async def recv_data(self, client, topic, data, retained):
         if self.writeonly:
-            print(f"mqtt.property: WARNING: Ignoring update to a write-only property: {self.topic}")
+            print(
+                "mqtt.property: WARNING: Ignoring update to a write-only property: "
+                + self.topic
+            )
         else:
             print(f"mqtt.property: {self.topic} -> ", end="")
             self.data = self.ntohd(data)
@@ -53,10 +56,20 @@ class MqttProp:
 
     def set(self, data):
         if self.readonly:
-            print(f"mqtt.property: WARNING: Ignoring update to a read-only property: {self.topic}")
+            print(
+                "mqtt.property: WARNING: Ignoring update to a read-only property: "
+                + self.topic
+            )
         elif self.data != data:
             self.data = data
-            create_task(self.client.publish(self.topic, self.htond(data), self.qos, self.retain, ))
+            create_task(
+                self.client.publish(
+                    self.topic,
+                    self.htond(data),
+                    self.qos,
+                    self.retain,
+                )
+            )
 
 
 class MqttFloatProp(MqttProp):

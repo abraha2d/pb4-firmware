@@ -1,3 +1,5 @@
+from errno import ENODEV
+
 from uasyncio import sleep_ms
 
 from upy_platform import i2c, s1_en, s2_en
@@ -25,18 +27,20 @@ def remove_addrs(addrs):
 def readfrom_mem(addr, memaddr, nbytes, *, addrsize=8):
     try:
         return i2c.readfrom_mem(addr, memaddr, nbytes, addrsize=addrsize)
-    except OSError:
-        print(f"drivers.readfrom_mem: Lost 0x{addr:02x}")
-        remove_addrs({addr})
+    except OSError as e:
+        if e.errno == ENODEV:
+            print(f"drivers.readfrom_mem: Lost 0x{addr:02x}")
+            remove_addrs({addr})
         raise
 
 
 def writeto_mem(addr, memaddr, buf, *, addrsize=8):
     try:
         return i2c.writeto_mem(addr, memaddr, buf, addrsize=addrsize)
-    except OSError:
-        print(f"drivers.writeto_mem: Lost 0x{addr:02x}")
-        remove_addrs({addr})
+    except OSError as e:
+        if e.errno == ENODEV:
+            print(f"drivers.writeto_mem: Lost 0x{addr:02x}")
+            remove_addrs({addr})
         raise
 
 
@@ -75,9 +79,11 @@ async def handle_i2c():
 
                         try:
                             new_d = await drv_callback(sX_bus, d, open_addrs)
-                        except OSError:
-                            print(f"drivers.handle_i2c: Device disappeared!")
-                            continue
+                        except OSError as e:
+                            if e.errno == ENODEV:
+                                print(f"drivers.handle_i2c: Device disappeared!")
+                                continue
+                            raise
 
                         if new_d is None:
                             print(f"drivers.handle_i2c: Driver did not handle device!")

@@ -56,14 +56,14 @@ errnos = [ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN, -2]
 
 class MQTTClient:
     def __init__(
-            self,
-            server: str,
-            client_id: str,
-            lwt=None,
-            bc=None,
-            username=None,
-            password=None,
-            keepalive=0,
+        self,
+        server: str,
+        client_id: str,
+        lwt=None,
+        bc=None,
+        username=None,
+        password=None,
+        keepalive=0,
     ):
         self.server = server
         self.client_id = client_id
@@ -105,13 +105,13 @@ class MQTTClient:
             while True:
                 try:
                     # workaround for https://github.com/micropython/micropython/issues/8038
-                    ai = getaddrinfo(self.server, 1883)[0][-1]  # TODO: remove once fixed upstream
+                    # TODO: remove once fixed upstream
+                    ai = getaddrinfo(self.server, 1883)[0][-1]
                     self.sock = await open_connection(*ai)
                     break
                 except OSError as e:
-                    if e.errno in errnos:
-                        continue
-                    raise
+                    if e.errno not in errnos:
+                        raise
         return self.sock
 
     async def wait_retry(self):
@@ -186,17 +186,16 @@ class MQTTClient:
                 await self.send_publish(topic, message, qos, retain)
                 sent = True
             except OSError as e:
-                if e.errno in errnos:
-                    continue
-                raise
+                if e.errno not in errnos:
+                    raise
 
-    async def send_puback(self, packet_id, ack_type):
+    async def send_puback(self, pid, ack_type):
         puback, puback_data = new_struct(MQTTAckSendLayout)
         puback.header.type = ack_type
         if ack_type == TYPE_PUBREL:
             puback.header.qos = 1
         puback.length = 2
-        puback.packet_id = packet_id
+        puback.packet_id = pid
         async with self.sock_lock:
             reader, writer = await self.get_sock()
             writer.write(puback_data)
@@ -205,12 +204,12 @@ class MQTTClient:
 
         if ack_type == TYPE_PUBACK or ack_type == TYPE_PUBCOMP:
             try:
-                packet_idx = [i[0] for i in self.inbound_wait].index(packet_id)
+                packet_idx = [i[0] for i in self.inbound_wait].index(pid)
             except ValueError:
                 print(f"mqtt.send_puback: WARNING just acked an unknown packet!")
                 return
 
-            packet_id, packet_time, topic, data, retained = self.inbound_wait.pop(packet_idx)
+            pid, packet_time, topic, data, retained = self.inbound_wait.pop(packet_idx)
 
             try:
                 topic = topic.decode()
@@ -222,11 +221,13 @@ class MQTTClient:
             try:
                 await cb(self, topic, data, retained)
             except Exception as e:
-                get_event_loop().call_exception_handler({
-                    "message": "mqtt.send_puback: Error during callback!",
-                    "future": current_task(),
-                    "exception": e
-                })
+                get_event_loop().call_exception_handler(
+                    {
+                        "message": "mqtt.send_puback: Error during callback!",
+                        "future": current_task(),
+                        "exception": e,
+                    }
+                )
 
     async def send_subscribe(self, topics, sub_type):
         await self.connected.wait()
@@ -239,7 +240,8 @@ class MQTTClient:
         parts = [encode_int(packet_id)]
 
         if sub_type == TYPE_SUBSCRIBE:
-            parts.extend(encode_str(topic[0]) + encode_int(topic[1], 1) for topic in topics)
+            part = (encode_str(topic[0]) + encode_int(topic[1], 1) for topic in topics)
+            parts.extend(part)
             self.suback_wait.append((packet_id, time(), topics))
         else:
             assert sub_type == TYPE_UNSUBSCRIBE
@@ -263,9 +265,8 @@ class MQTTClient:
                 await self.send_subscribe(topics, TYPE_SUBSCRIBE)
                 sent = True
             except OSError as e:
-                if e.errno in errnos:
-                    continue
-                raise
+                if e.errno not in errnos:
+                    raise
 
     async def unsubscribe(self, *topics):
         sent = False
@@ -274,9 +275,8 @@ class MQTTClient:
                 await self.send_subscribe(topics, TYPE_UNSUBSCRIBE)
                 sent = True
             except OSError as e:
-                if e.errno in errnos:
-                    continue
-                raise
+                if e.errno not in errnos:
+                    raise
 
     async def send_pingreq(self):
         header, header_data = new_struct(MQTTHeaderLayout)
@@ -299,7 +299,7 @@ class MQTTClient:
                 await writer.drain()
                 writer.close()
                 await writer.wait_closed()
-            except OSError:
+            except OSError:  # TODO: Cast a smaller net
                 pass
             self.sock = None
         self.last_activity = time()
@@ -361,8 +361,19 @@ class MQTTClient:
 
         if header.qos > 0:
             packet_id, data = decode_int(data)
-            self.inbound_wait.append((packet_id, time(), topic, data, header.retain == 1))
-            await self.send_puback(packet_id, TYPE_PUBACK if header.qos == 1 else TYPE_PUBREC)
+            self.inbound_wait.append(
+                (
+                    packet_id,
+                    time(),
+                    topic,
+                    data,
+                    header.retain == 1,
+                )
+            )
+            await self.send_puback(
+                packet_id,
+                TYPE_PUBACK if header.qos == 1 else TYPE_PUBREC,
+            )
         else:
             try:
                 topic = topic.decode()
@@ -374,11 +385,13 @@ class MQTTClient:
             try:
                 await cb(self, topic, data, header.retain == 1)
             except Exception as e:
-                get_event_loop().call_exception_handler({
-                    "message": "mqtt.recv_publish: Error during callback!",
-                    "future": current_task(),
-                    "exception": e
-                })
+                get_event_loop().call_exception_handler(
+                    {
+                        "message": "mqtt.recv_publish: Error during callback!",
+                        "future": current_task(),
+                        "exception": e,
+                    }
+                )
 
     async def recv_puback(self, header):
         reader, writer = await self.get_sock()
@@ -387,16 +400,24 @@ class MQTTClient:
             await self.send_puback(puback.packet_id, TYPE_PUBCOMP)
         else:
             outbound_wait = (
-                self.puback_wait if header.type == TYPE_PUBACK else
-                self.pubrec_wait if header.type == TYPE_PUBREC else
-                self.pubcomp_wait
+                self.puback_wait
+                if header.type == TYPE_PUBACK
+                else self.pubrec_wait
+                if header.type == TYPE_PUBREC
+                else self.pubcomp_wait
             )
 
             try:
                 packet_idx = [i[0] for i in outbound_wait].index(puback.packet_id)
             except ValueError:
-                print(f"mqtt.recv_puback({header.type}): WARNING {puback.packet_id} not in {outbound_wait}")
-                print(f"mqtt.recv_puback({header.type}): DEBUG {hexlify(puback_data).decode()}")
+                print(
+                    f"mqtt.recv_puback({header.type}): "
+                    + f"WARNING {puback.packet_id} not in {outbound_wait}"
+                )
+                print(
+                    f"mqtt.recv_puback({header.type}): "
+                    + f"DEBUG {hexlify(puback_data).decode()}"
+                )
                 return
 
             packet_info = outbound_wait.pop(packet_idx)
@@ -408,19 +429,31 @@ class MQTTClient:
     async def recv_suback(self, header):
         reader, writer = await self.get_sock()
         suback, suback_data = await recv_struct(reader, MQTTAckRecvLayout)
-        suback_wait = self.suback_wait if header.type == TYPE_SUBACK else self.unsuback_wait
+        wait = self.suback_wait if header.type == TYPE_SUBACK else self.unsuback_wait
         try:
-            suback_wait.pop([i[0] for i in suback_wait].index(suback.packet_id))
+            wait.pop([i[0] for i in wait].index(suback.packet_id))
         except ValueError:
-            print(f"mqtt.recv_suback({header.type}): WARNING {suback.packet_id} not in {suback_wait}")
-            print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data).decode()}")
+            print(
+                f"mqtt.recv_suback({header.type}): "
+                + f"WARNING {suback.packet_id} not in {wait}"
+            )
+            print(
+                f"mqtt.recv_suback({header.type}): "
+                + f"DEBUG {hexlify(suback_data).decode()}"
+            )
 
         for i in range(suback.length - 2):
             byte = await reader.readexactly(1)
             return_code = int.from_bytes(byte, "big")
             if return_code > 2:
-                print(f"mqtt.recv_suback({header.type}): WARNING return code {return_code} > 2")
-                print(f"mqtt.recv_suback({header.type}): DEBUG {hexlify(suback_data).decode()}")
+                print(
+                    f"mqtt.recv_suback({header.type}): "
+                    + f"WARNING return code {return_code} > 2"
+                )
+                print(
+                    f"mqtt.recv_suback({header.type}): "
+                    + f"DEBUG {hexlify(suback_data).decode()}"
+                )
 
     async def recv_pingresp(self, header):
         assert header.type == TYPE_PINGRESP
@@ -474,9 +507,8 @@ class MQTTClient:
                     except EOFError:
                         continue
                     except OSError as e:
-                        if e.errno in errnos:
-                            continue
-                        raise
+                        if e.errno not in errnos:
+                            raise
                 else:
                     await sleep_ms(time_to_ping * 1000)
             else:

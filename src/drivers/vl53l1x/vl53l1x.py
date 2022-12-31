@@ -1,3 +1,5 @@
+from errno import ENODEV
+
 from uasyncio import sleep_ms
 
 from drivers import register_address, readfrom_mem, writeto_mem, BUS_QWIIC
@@ -27,15 +29,17 @@ class VL53L1X:
     def readfrom_mem(self, memaddr, nbytes):
         try:
             return readfrom_mem(self.i2c_addr, memaddr, nbytes, addrsize=16)
-        except OSError:
-            remove_sensor_from_map(self)
+        except OSError as e:
+            if e.errno == ENODEV:
+                remove_sensor_from_map(self)
             raise
 
     def writeto_mem(self, memaddr, buf):
         try:
             return writeto_mem(self.i2c_addr, memaddr, buf, addrsize=16)
-        except OSError:
-            remove_sensor_from_map(self)
+        except OSError as e:
+            if e.errno == ENODEV:
+                remove_sensor_from_map(self)
             raise
 
     async def init_sensor(self):
