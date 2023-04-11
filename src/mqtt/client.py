@@ -1,6 +1,6 @@
 import gc
 from binascii import hexlify
-from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN
+from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN, ENFILE
 from socket import getaddrinfo
 from time import time
 
@@ -55,9 +55,10 @@ errnos = [
     ECONNABORTED,
     ECONNRESET,
     EHOSTUNREACH,
+    ENFILE,
     ENOENT,
     ENOTCONN,
-    -2, # ???
+    -2,  # ???
     -259,  # ESP_ERR_INVALID_STATE ?
 ]
 

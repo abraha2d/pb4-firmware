@@ -15,7 +15,9 @@ from config import (
     MQTT_SERVER,
     MQTT_TOPIC_ERRORS,
     MQTT_TOPIC_STATUS,
-    MQTT_TOPIC_VERSION,
+    MQTT_TOPIC_FW_VER,
+    MQTT_TOPIC_APP_NAME,
+    MQTT_TOPIC_APP_VER,
     erase_vfs_config,
     erase_wlan_config,
     get_wlan_config,
@@ -24,6 +26,9 @@ from drivers import DRIVER_LIST, handle_i2c
 from ota import setup_ota_subscriptions
 from upy_platform import boot, status, version, wlan_ap, wlan_sta
 from utils import get_device_mac, get_device_name, connect_wlan, wlan_is_connected
+
+# noinspection PyUnresolvedReferences
+from version import NAME as APP_NAME, VERSION as APP_VERSION
 from views import urlconf
 
 mqtt_client = None
@@ -133,7 +138,9 @@ async def main():
         )
 
         create_task(mqtt_client.run())
-        create_task(mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True))
+        create_task(mqtt_client.publish(MQTT_TOPIC_FW_VER, uname().version, 1, True))
+        create_task(mqtt_client.publish(MQTT_TOPIC_APP_NAME, APP_NAME, 1, True))
+        create_task(mqtt_client.publish(MQTT_TOPIC_APP_VER, APP_VERSION, 1, True))
         create_task(setup_ota_subscriptions(mqtt_client))
 
     status.app_state = status.APP_IDLE
