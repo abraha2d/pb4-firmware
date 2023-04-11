@@ -6,5 +6,6 @@
     <mapping directory="$PROJECT_DIR$/fw/micropython/lib/axtls" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/fw/micropython/lib/berkeley-db-1.xx" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/fw/micropython/lib/libffi" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ui" vcs="Git" />
   </component>
 </project>

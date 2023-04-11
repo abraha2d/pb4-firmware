@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-scripts/13_pack_app.sh
+scripts/12_pack_app.sh
 
 VFS_OFFSET=$(gen_esp32part.py build/partition-table.bin | grep '^vfs,' | cut -d, -f4)
 
