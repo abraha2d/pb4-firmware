@@ -83,6 +83,7 @@ async def main(mqtt_client):
                         ex_request[idx] = False
 
                     distance = d
+                    await sleep_ms(LOOP_TIME)
 
             except OSError as e:
                 ex_request[idx] = False

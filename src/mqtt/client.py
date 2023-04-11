@@ -18,6 +18,7 @@ from uasyncio import (
 
 from .constants import (
     PROTOCOL,
+    RETRY_INTERVAL,
     TYPE_CONNECT,
     TYPE_CONNACK,
     TYPE_PUBLISH,
@@ -89,7 +90,7 @@ class MQTTClient:
         self.connected = Event()
         self.last_activity = time()
         self.packet_id = 0
-        self.retry_interval = 500
+        self.retry_interval = RETRY_INTERVAL
 
         self.puback_wait = []
         self.pubrec_wait = []
@@ -121,6 +122,8 @@ class MQTTClient:
                 except OSError as e:
                     if e.errno not in errnos:
                         raise
+                await self.wait_retry()
+            self.retry_interval = RETRY_INTERVAL
         return self.sock
 
     async def wait_retry(self):
@@ -197,6 +200,8 @@ class MQTTClient:
             except OSError as e:
                 if e.errno not in errnos:
                     raise
+            await self.wait_retry()
+        self.retry_interval = RETRY_INTERVAL
 
     async def send_puback(self, pid, ack_type):
         puback, puback_data = new_struct(MQTTAckSendLayout)
@@ -276,6 +281,8 @@ class MQTTClient:
             except OSError as e:
                 if e.errno not in errnos:
                     raise
+            await self.wait_retry()
+        self.retry_interval = RETRY_INTERVAL
 
     async def unsubscribe(self, *topics):
         sent = False
@@ -286,6 +293,8 @@ class MQTTClient:
             except OSError as e:
                 if e.errno not in errnos:
                     raise
+            self.wait_retry()
+        self.retry_interval = RETRY_INTERVAL
 
     async def send_pingreq(self):
         header, header_data = new_struct(MQTTHeaderLayout)
@@ -334,6 +343,7 @@ class MQTTClient:
             await self.wait_retry()
             await self.connect()
             return
+        self.retry_interval = RETRY_INTERVAL
 
         if self.clean_session:
             if connack.session_present == 1:
@@ -492,6 +502,7 @@ class MQTTClient:
         while True:
             try:
                 await self.connect()
+                self.retry_interval = RETRY_INTERVAL
                 while True:
                     await self.process_receive()
             except KeyError:
@@ -505,6 +516,7 @@ class MQTTClient:
                 raise
             finally:
                 await self.disconnect()
+            await self.wait_retry()
 
     async def process_keepalive(self):
         while True:
