@@ -105,7 +105,7 @@ async def recv_hash(client, data, retained, to_update, ok_topic, use_ota=False):
         print(
             f"ota.recv_hash: Hash invalid! "
             + f"actual (SHA256:{hexlify(ota_hash).decode()}) != "
-              +f"expected (SHA256:{hexlify(data).decode()})"
+            + f"expected (SHA256:{hexlify(data).decode()})"
         )
 
     print(f"ota.recv_hash: Communicating failure to broker...")

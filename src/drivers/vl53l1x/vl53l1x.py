@@ -1,4 +1,4 @@
-from errno import ENODEV
+from errno import ENODEV, ETIMEDOUT
 
 from uasyncio import sleep_ms
 
@@ -10,37 +10,54 @@ from .constants import *
 SENSOR_BUS_MAP = {BUS_QWIIC: []}
 
 
-def get_sensor_on_bus(device_bus):
-    return SENSOR_BUS_MAP.get(device_bus, None)
+def get_sensor_on_bus(device_bus, return_first=False):
+    try:
+        sensor = SENSOR_BUS_MAP[device_bus]
+        if return_first and type(sensor) == list:
+            sensor = sensor[0]
+        return sensor
+    except (KeyError, IndexError):
+        return None
 
 
 def remove_sensor_from_map(sensor):
-    for b in SENSOR_BUS_MAP.keys():
-        if type(SENSOR_BUS_MAP[b]) == list and sensor in SENSOR_BUS_MAP[b]:
-            SENSOR_BUS_MAP[b].pop(sensor)
-        elif SENSOR_BUS_MAP[b] == sensor:
-            SENSOR_BUS_MAP.pop(b)
+    global SENSOR_BUS_MAP
+    SENSOR_BUS_MAP = {
+        k: [i for i in v if i != sensor] if type(v) == list else v
+        for k, v in SENSOR_BUS_MAP.items()
+        if v != sensor
+    }
 
 
 class VL53L1X:
     def __init__(self, i2c_addr):
         self.i2c_addr = i2c_addr
 
-    def readfrom_mem(self, memaddr, nbytes):
-        try:
-            return readfrom_mem(self.i2c_addr, memaddr, nbytes, addrsize=16)
-        except OSError as e:
-            if e.errno == ENODEV:
-                remove_sensor_from_map(self)
-            raise
+    def readfrom_mem(self, memaddr, nbytes, retries=3):
+        for i in range(retries):
+            try:
+                return readfrom_mem(self.i2c_addr, memaddr, nbytes, addrsize=16)
+            except OSError as e:
+                if e.errno == ENODEV:
+                    remove_sensor_from_map(self)
+                elif e.errno == ETIMEDOUT:
+                    print(f"drivers.vl53l1x.readfrom_mem: Timeout (try {i+1})")
+                    continue
+                raise
+        raise OSError(ETIMEDOUT)
 
-    def writeto_mem(self, memaddr, buf):
-        try:
-            return writeto_mem(self.i2c_addr, memaddr, buf, addrsize=16)
-        except OSError as e:
-            if e.errno == ENODEV:
-                remove_sensor_from_map(self)
-            raise
+    def writeto_mem(self, memaddr, buf, retries=3):
+        for i in range(retries):
+            try:
+                return writeto_mem(self.i2c_addr, memaddr, buf, addrsize=16)
+            except OSError as e:
+                if e.errno == ENODEV:
+                    remove_sensor_from_map(self)
+                elif e.errno == ETIMEDOUT:
+                    print(f"drivers.vl53l1x.writeto_mem: Timeout (try {i+1})")
+                    continue
+                raise
+        raise OSError(ETIMEDOUT)
 
     async def init_sensor(self):
         # Wait for device booted

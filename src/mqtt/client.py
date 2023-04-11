@@ -60,7 +60,7 @@ class MQTTClient:
         server: str,
         client_id: str,
         lwt=None,
-        bc=None,
+        bc=None,  # birth certificate (i.e. opposite of last will and testament)
         username=None,
         password=None,
         keepalive=0,

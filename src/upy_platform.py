@@ -1,3 +1,4 @@
+from binascii import hexlify
 from os import uname
 
 # noinspection PyUnresolvedReferences
@@ -18,11 +19,24 @@ class FakeSignal:
 
 version = 4 if "PB 4.0" in uname().machine else 2
 
+wlan_ap = WLAN(AP_IF)
+wlan_sta = WLAN(STA_IF)
+
+exhaust_quirk = hexlify(wlan_sta.config("mac"))[-6:].decode() in [
+    "dbd5d8",
+]
+
 boot = Signal(0, Pin.IN, invert=True)
 
-exhaust = Signal(13 if version == 4 else 14, Pin.OUT, value=0)
-flush_1 = Signal(25 if version == 4 else 12, Pin.OUT, value=0)
-flush_2 = Signal(26 if version == 4 else 13, Pin.OUT, value=0)
+if version == 4:
+    exhaust = Signal(26 if exhaust_quirk else 13, Pin.OUT, value=0)
+    flush_1 = Signal(25, Pin.OUT, value=0)
+    flush_2 = Signal(26, Pin.OUT, value=0)
+else:
+    exhaust = Signal(14, Pin.OUT, value=0)
+    flush_1 = Signal(12, Pin.OUT, value=0)
+    flush_2 = Signal(13, Pin.OUT, value=0)
+
 
 i2c = I2C(0, sda=Pin(21), scl=Pin(22))
 
@@ -41,9 +55,6 @@ touch_2_pin = Pin(33)
 
 touch_1 = TouchPad(touch_1_pin)
 touch_2 = TouchPad(touch_2_pin)
-
-wlan_ap = WLAN(AP_IF)
-wlan_sta = WLAN(STA_IF)
 
 if version == 4:
 

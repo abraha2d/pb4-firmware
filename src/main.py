@@ -149,7 +149,14 @@ async def main():
         app_config.append("watchdog")
         app_config.append("webrepl")
 
-        if get_device_mac() == "dbd4c4":
+        if get_device_mac() in [
+            "dbcd50",  # S/N 001 DUO, 1S
+            "dbd5d8",  # S/N 002 UNO, 2E
+            "dbd4c4",  # S/N 004 UNO
+            "dbcd68",  # S/N 005 UNO
+            "dbd4bc",  # S/N 006 UNO
+            "dbcd48",  # S/N 007 UNO
+        ]:
             driver_config.append("vl53l1x")
             app_config.append("pb_exhaust")
             app_config.append("pb_flush")

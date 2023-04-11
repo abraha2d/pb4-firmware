@@ -14,7 +14,7 @@ from .config import (
 
 
 async def main(mqtt_client):
-    dual_potty = MqttBoolProp(mqtt_client, MQTT_TOPIC_DUAL_POTTY, False, readonly=True)
+    # dual_potty = MqttBoolProp(mqtt_client, MQTT_TOPIC_DUAL_POTTY, False, readonly=True)
     flush_time = MqttFloatProp(mqtt_client, MQTT_TOPIC_FLUSH_TIME, 3, readonly=True)
 
     touch_pad = [touch_1, touch_2]
@@ -50,6 +50,7 @@ async def main(mqtt_client):
 
     while True:
         process_touch(0)
-        if dual_potty.get():
-            process_touch(1)
+        # if dual_potty.get():
+        #     process_touch(1)
+        process_touch(1)
         await sleep_ms(LOOP_TIME)
