@@ -55,7 +55,7 @@ errnos = [
     ECONNABORTED,
     ECONNRESET,
     EHOSTUNREACH,
-    ENFILE,
+    23,  # ENFILE
     ENOENT,
     ENOTCONN,
     -2,  # ???
