@@ -1,6 +1,6 @@
 import gc
 from binascii import hexlify
-from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN, ENFILE
+from errno import ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN
 from socket import getaddrinfo
 from time import time
 
