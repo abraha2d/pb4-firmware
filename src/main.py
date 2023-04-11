@@ -46,6 +46,7 @@ async def do_setup():
     print("main.do_setup: Waiting for configuration...")
     status.network_state = status.NETWORK_HOTSPOT
     await wlan_is_connected()
+    status.network_state = status.NETWORK_CONNECTED
 
     print("main.do_setup: Stopping hotspot...")
     wlan_ap.active(False)
@@ -93,10 +94,13 @@ def exc_handler(loop, context):
 async def main():
     global mqtt_client
 
+    loop = get_event_loop()
+    loop.set_exception_handler(exc_handler)
+
     print("main.main: Hold BOOT within the next second to factory reset...")
     status.app_state = status.APP_BOOTING
 
-    status_task = create_task(status.run())
+    create_task(status.run())
     await sleep_ms(1000)
 
     if boot.value():
@@ -114,7 +118,7 @@ async def main():
             + "Not starting network-connected features..."
         )
     else:
-        await do_connect()
+        create_task(do_connect())
 
         print("main.main: Starting MQTT client...")
         status_offline = [MQTT_TOPIC_STATUS, "0", 1, True]
@@ -128,15 +132,11 @@ async def main():
             keepalive=10,
         )
 
-        mqtt_task = create_task(mqtt_client.run())
-        await mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True)
-        await setup_ota_subscriptions(mqtt_client)
+        create_task(mqtt_client.run())
+        create_task(mqtt_client.publish(MQTT_TOPIC_VERSION, uname().version, 1, True))
+        create_task(setup_ota_subscriptions(mqtt_client))
 
     status.app_state = status.APP_IDLE
-
-    # TODO: try to run as much initialization as possible before calling this
-    if Partition(Partition.RUNNING).info()[4] != "factory":
-        Partition.mark_app_valid_cancel_rollback()
 
     driver_config = []
     app_config = []
@@ -174,22 +174,24 @@ async def main():
 
     if DRIVER_LIST:
         print(f"main.main: Starting I2C handler...")
-        driver_task = create_task(handle_i2c())
+        create_task(handle_i2c())
 
     for app_id in app_config:
         try:
             app = getattr(__import__(f"apps.{app_id}"), app_id)
             app_name = getattr(app, "NAME", app_id)
             print(f"main.main: Starting app '{app_name}'...")
-            app_task = create_task(app.main(mqtt_client))
+            create_task(app.main(mqtt_client))
         except ImportError:
             print(f"main.main: Skipping unknown app ID '{app_id}'...")
         except AttributeError:
             print(f"main.main: Skipping broken app '{app_id}'")
 
-    print("main.main: Starting event loop...")
-    loop = get_event_loop()
-    loop.set_exception_handler(exc_handler)
+    # TODO: try to run as much initialization as possible before calling this
+    if Partition(Partition.RUNNING).info()[4] != "factory":
+        Partition.mark_app_valid_cancel_rollback()
+
+    print("main.main: Handing control to event loop...")
     loop.run_forever()
 
 
