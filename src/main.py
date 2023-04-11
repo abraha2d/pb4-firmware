@@ -140,7 +140,7 @@ async def main():
         create_task(mqtt_client.run())
         create_task(mqtt_client.publish(MQTT_TOPIC_FW_VER, uname().version, 1, True))
         create_task(mqtt_client.publish(MQTT_TOPIC_APP_NAME, APP_NAME, 1, True))
-        create_task(mqtt_client.publish(MQTT_TOPIC_APP_VER, APP_VERSION, 1, True))
+        create_task(mqtt_client.publish(MQTT_TOPIC_APP_VER, f"v{APP_VERSION}", 1, True))
         create_task(setup_ota_subscriptions(mqtt_client))
 
     status.app_state = status.APP_IDLE
