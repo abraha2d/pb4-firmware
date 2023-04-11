@@ -51,7 +51,15 @@ from .utils import (
     decode_str,
 )
 
-errnos = [ECONNABORTED, ECONNRESET, EHOSTUNREACH, ENOENT, ENOTCONN, -2]
+errnos = [
+    ECONNABORTED,
+    ECONNRESET,
+    EHOSTUNREACH,
+    ENOENT,
+    ENOTCONN,
+    -2, # ???
+    -259,  # ESP_ERR_INVALID_STATE ?
+]
 
 
 class MQTTClient:
